@@ -1,0 +1,144 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "email": { "type": "string" },
+        "bio": { "type": "string" },
+        "undertone": { "type": "string" },
+        "confidenceScore": { "type": "number" },
+        "facialMetrics": {
+          "type": "object",
+          "properties": {
+            "faceShape": { "type": "string" },
+            "eyeType": { "type": "string" },
+            "skinUndertone": { "type": "string" }
+          }
+        },
+        "privacySettings": {
+          "type": "object",
+          "properties": {
+            "localProcessing": { "type": "boolean" }
+          }
+        },
+        "lastScanAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "email", "createdAt"]
+    },
+    "VanityProduct": {
+      "title": "Vanity Product",
+      "description": "Makeup product in user's digital vanity",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "category": { "type": "string" },
+        "name": { "type": "string" },
+        "brand": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "category", "name", "createdAt"]
+    },
+    "Achievement": {
+      "title": "Achievement",
+      "description": "Gamification badge unlocked by the user",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "icon": { "type": "string" },
+        "unlockedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "name", "unlockedAt"]
+    },
+    "Snapshot": {
+      "title": "Snapshot",
+      "description": "Time-lapse snapshot for progress tracking",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "lookName": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "imageUrl", "createdAt"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Chat message",
+      "type": "object",
+      "properties": {
+        "text": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "imageUrl": { "type": "string" }
+      },
+      "required": ["text", "senderId", "senderName", "createdAt"]
+    },
+    "Post": {
+      "title": "Post",
+      "description": "Social feed post",
+      "type": "object",
+      "properties": {
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "title": { "type": "string" },
+        "type": { "type": "string" },
+        "likes": { "type": "number" },
+        "imageUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["authorId", "authorName", "title", "type", "imageUrl", "createdAt"]
+    },
+    "Look": {
+      "title": "Look",
+      "description": "Saved virtual try-on look",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "colors": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "name", "colors", "createdAt"]
+    }
+  },
+  "firestore": {
+    "users": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "messages": {
+      "schema": "Message",
+      "description": "Global chat messages"
+    },
+    "feed": {
+      "schema": "Post",
+      "description": "Social media feed posts"
+    },
+    "users/{userId}/looks": {
+      "schema": "Look",
+      "description": "User saved looks"
+    },
+    "users/{userId}/vanity": {
+      "schema": "VanityProduct",
+      "description": "User digital makeup bag"
+    },
+    "users/{userId}/achievements": {
+      "schema": "Achievement",
+      "description": "User unlocked achievements"
+    },
+    "users/{userId}/snapshots": {
+      "schema": "Snapshot",
+      "description": "User time-lapse progress photos"
+    }
+  }
+}

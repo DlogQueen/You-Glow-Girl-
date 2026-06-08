@@ -1,0 +1,123 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Master Gate (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper Primitives
+    function isSignedIn() { return request.auth != null; }
+    function isVerified() { return isSignedIn(); } // Keeping it simple for demo, or request.auth.token.email_verified == true;
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+
+    // --- Validation Blueprints ---
+
+    function isValidUser(data) {
+      return data.uid is string && 
+             data.displayName is string && data.displayName.size() <= 100 &&
+             data.email is string && data.email.size() <= 100 &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidVanityProduct(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.category is string &&
+             data.name is string && data.name.size() <= 200 &&
+             data.createdAt == request.time;
+    }
+
+    function isValidAchievement(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.name is string &&
+             data.unlockedAt == request.time;
+    }
+
+    function isValidSnapshot(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.imageUrl is string &&
+             data.createdAt == request.time;
+    }
+
+    function isValidMessage(data) {
+      return data.text is string && data.text.size() <= 1000 &&
+             data.senderId is string && data.senderId == request.auth.uid &&
+             data.senderName is string &&
+             data.createdAt == request.time;
+    }
+
+    function isValidPost(data) {
+      return data.authorId is string && data.authorId == request.auth.uid &&
+             data.authorName is string &&
+             data.title is string && data.title.size() <= 200 &&
+             data.type is string &&
+             data.likes is number &&
+             data.imageUrl is string &&
+             data.createdAt == request.time;
+    }
+
+    function isValidLook(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.name is string && data.name.size() <= 100 &&
+             data.colors is list && data.colors.size() <= 10 &&
+             data.createdAt == request.time;
+    }
+
+    // --- Collection Routes ---
+
+    match /users/{userId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isOwner(userId) && isValidUser(incoming()) && incoming().uid == userId;
+      allow update: if isOwner(userId) && isValidUser(incoming()) && 
+                    incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'bio', 'undertone', 'confidenceScore', 'facialMetrics', 'privacySettings', 'lastScanAt', 'pronouns', 'goals', 'beautyGoal', 'tier']);
+      allow delete: if isOwner(userId);
+    }
+
+    match /users/{userId}/gallery/{galleryId} {
+      allow read: if true;
+      allow create, update, delete: if isOwner(userId);
+    }
+
+    match /messages/{messageId} {
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
+      allow create: if isVerified() && isValidMessage(incoming());
+    }
+
+    match /feed/{postId} {
+      allow list: if true; // Public feed
+      allow get: if true;
+      allow create: if isVerified() && isValidPost(incoming());
+      allow update: if isVerified() && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['likes']) // Simple likes update
+      );
+    }
+
+    match /users/{userId}/looks/{lookId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidLook(incoming());
+      allow delete: if isOwner(userId);
+    }
+
+    match /users/{userId}/vanity/{productId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidVanityProduct(incoming());
+      allow delete: if isOwner(userId);
+    }
+
+    match /users/{userId}/achievements/{achId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidAchievement(incoming());
+    }
+
+    match /users/{userId}/snapshots/{snapId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidSnapshot(incoming());
+      allow delete: if isOwner(userId);
+    }
+  }
+}

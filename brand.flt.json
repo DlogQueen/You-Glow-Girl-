@@ -1,0 +1,28 @@
+{
+  "theme": {
+    "palette": {
+      "white": "#FFFFFF",
+      "cyber_lime": "#E1FF00",
+      "empowerment_pink": "#FF4A8D",
+      "onyx": "#1C1C1E"
+    },
+    "hierarchy": {
+      "dominance": "90% White",
+      "utility": "Cyber Lime",
+      "emotional": "Empowerment Pink"
+    }
+  },
+  "interface": {
+    "mode": "Full-Bleed True-Mirror",
+    "ring_light": {
+      "style": "Snapchat Ring Toggle",
+      "function": "Face Illumination"
+    },
+    "chat": {
+      "style": "Floating Overlay",
+      "blur": "20px",
+      "radius": "24px",
+      "shadow": "0 10px 40px rgba(0, 0, 0, 0.08)"
+    }
+  }
+}
