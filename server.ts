@@ -220,8 +220,13 @@ async function startServer() {
         model: "gemini-3.1-flash-live-preview",
         callbacks: {
           onmessage: (message: LiveServerMessage) => {
-            const audio = message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
-            if (audio) clientWs.send(JSON.stringify({ audio }));
+            const data = message.serverContent?.modelTurn?.parts?.[0];
+            if (data?.inlineData?.data) {
+                clientWs.send(JSON.stringify({ audio: data.inlineData.data }));
+            }
+            if (data?.text) {
+                clientWs.send(JSON.stringify({ makeup_feedback: data.text }));
+            }
             
             if (message.serverContent?.interrupted) {
               clientWs.send(JSON.stringify({ interrupted: true }));
@@ -233,11 +238,14 @@ async function startServer() {
           }
         },
         config: {
-          responseModalities: [Modality.AUDIO],
+          responseModalities: [Modality.AUDIO, Modality.TEXT],
           speechConfig: {
-            voiceConfig: { prebuiltVoiceConfig: { voiceName: "Aoede" } }, // Aoede or another female voice
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: "Aoede" } },
           },
-          systemInstruction: ADA_SYSTEM_INSTRUCTION,
+          systemInstruction: ADA_SYSTEM_INSTRUCTION + 
+              "\n\n[EMOTIONAL CHECK] Analyze the user's facial mood. " +
+              "If they appear sad, down, or low-energy, provide uplifting, personalized makeup encouragement. " +
+              "Be supportive and caring.",
         },
       });
 

@@ -6,6 +6,7 @@ import {
   Play, ArrowLeft, Check, Loader2, Award
 } from "lucide-react";
 import { pcmToBase64, playAudioChunk, resetAudioSchedule } from "../lib/audio";
+import { triggerHaptic } from "../lib/haptics";
 
 interface AdaLiveViewProps {
   captureFrame: () => string | null;
@@ -129,6 +130,7 @@ export function AdaLiveView({ captureFrame, isImmersiveMode, setIsImmersiveMode 
   const [scanningProgress, setScanningProgress] = useState<number>(0);
   const [mockAdaFdbk, setMockAdaFdbk] = useState<string>("");
   const [isFeedbackLoading, setIsFeedbackLoading] = useState<boolean>(false);
+  const [realtimeFeedback, setRealtimeFeedback] = useState<string | null>(null);
 
   const startScanningAnalysis = () => {
     setIsScanningActive(true);
@@ -207,6 +209,9 @@ export function AdaLiveView({ captureFrame, isImmersiveMode, setIsImmersiveMode 
              if (speakingTimeout) clearTimeout(speakingTimeout);
              speakingTimeout = setTimeout(() => setIsSpeaking(false), 800);
           }
+          if (msg.makeup_feedback) {
+            setRealtimeFeedback(msg.makeup_feedback);
+          }
           if (msg.interrupted) {
              resetAudioSchedule();
           }
@@ -233,7 +238,7 @@ export function AdaLiveView({ captureFrame, isImmersiveMode, setIsImmersiveMode 
                 }
             }
           }
-        }, 3000);
+        }, 500);
         
       } catch (err: any) {
         console.warn("Live API initialization caught gracefully:", err);
@@ -400,7 +405,7 @@ export function AdaLiveView({ captureFrame, isImmersiveMode, setIsImmersiveMode 
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={activateLive}
+                    onClick={() => { triggerHaptic(); activateLive(); }}
                     disabled={!agreeMistakes}
                     className={`w-full py-2.5 rounded-2xl flex items-center justify-center gap-1.5 text-[9px] font-black uppercase tracking-widest transition-all ${
                       agreeMistakes 
@@ -472,109 +477,27 @@ export function AdaLiveView({ captureFrame, isImmersiveMode, setIsImmersiveMode 
                 {/* MAIN CONTENT AREA */}
                 {glassTab === "face" ? (
                   <>
-                    {/* THE HUMAN FACE GRAPHICS SIMULATION (Representing the Photos) */}
+                    {/* ADA AVATAR REPRESENTATION */}
                     <div className="flex-1 relative flex items-center justify-center my-2 z-10 overflow-hidden">
-                      
-                      {/* Illustrated Humanoid Outlines */}
-                      <svg className="w-48 h-48 text-white/10" viewBox="0 0 100 100" fill="none">
-                        {/* Simulated Head Contour */}
-                        <ellipse cx="50" cy="45" rx="20" ry="26" stroke="currentColor" strokeWidth="0.5" strokeDasharray="1 1" />
-                        <ellipse cx="50" cy="45" rx="19" ry="25" stroke="currentColor" strokeWidth="0.2" />
-                        {/* Neck */}
-                        <path d="M42,66 L42,76 C42,82 35,85 32,85 C28,85 24,94 24,94" stroke="currentColor" strokeWidth="0.5" strokeDasharray="1 1" />
-                        <path d="M58,66 L58,76 C58,82 65,85 68,85 C72,85 76,94 76,94" stroke="currentColor" strokeWidth="0.5" strokeDasharray="1 1" />
-
-                        {/* Draw Eyes */}
-                        <ellipse cx="43" cy="42" rx="4" ry="2" stroke="currentColor" strokeWidth="0.4" />
-                        <circle cx="43" cy="42" r="1.5" fill={modesData[activeMode].accent} opacity="0.8" />
-                        <ellipse cx="57" cy="42" rx="4" ry="2" stroke="currentColor" strokeWidth="0.4" />
-                        <circle cx="57" cy="42" r="1.5" fill="#FF5CA2" opacity="0.8" />
-
-                        {/* Nose */}
-                        <path d="M50,40 L50,50 L48,52 L52,52 L50,50" stroke="currentColor" strokeWidth="0.4" />
-
-                        {/* Mouth with Pink Accents */}
-                        <path d="M42,59 Q50,65 58,59" stroke="#FF5CA2" strokeWidth="0.8" fill="none" opacity="0.9" />
-                        
-                        {/* 1. SYNTHETIC DERMAL MATRIX (LINE/PINK TRACKING Overlays) */}
-                        <path d="M34,35 C38,28 44,28 50,32 C56,28 62,28 66,35" stroke="#D1FA00" strokeWidth="0.5" strokeDasharray="1 1" opacity="0.8" />
-                        <circle cx="34" cy="35" r="1" fill="#D1FA00" />
-                        <circle cx="66" cy="35" r="1" fill="#D1FA00" />
-                        <path d="M31,43 Q38,50 48,46 L50,56" stroke="#FF5CA2" strokeWidth="0.4" strokeDasharray="1 2" opacity="0.75" />
-
-                        {/* 2. CHROMA NEXUS PRISM CORE */}
-                        <circle cx="50" cy="74" r={isSpeaking ? 10 : 8} fill="none" stroke="url(#prismGrad)" strokeWidth="1.5" className="animate-spin" style={{ transformOrigin: "50px 74px", animationDuration: isSpeaking ? "2s" : "6s" }} />
-                        <circle cx="50" cy="74" r={isSpeaking ? 6 : 4} fill="url(#prismGradInternal)" opacity="0.9" className="animate-pulse" />
-
-                        {/* Define Gradients */}
-                        <defs>
-                          <linearGradient id="prismGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" stopColor="#D1FA00" />
-                            <stop offset="50%" stopColor="#FF5CA2" />
-                            <stop offset="100%" stopColor="#2DD4BF" />
-                          </linearGradient>
-                          <radialGradient id="prismGradInternal" cx="50%" cy="50%" r="50%">
-                            <stop offset="0%" stopColor="#FF5CA2" />
-                            <stop offset="70%" stopColor="#D1FA00" />
-                            <stop offset="100%" stopColor="#2DD4BF" />
-                          </radialGradient>
-                        </defs>
-                      </svg>
-
-                      {/* Dynamic Interactive Callouts matching the photos! */}
-                      <div className="absolute inset-0 font-mono text-[6px] pointer-events-none">
-                        {/* Glow Path Line on Eyebrow */}
-                        <div className="absolute top-[22%] left-[3%] flex items-center gap-1">
-                          <div className="w-6 h-[1px] bg-cyber-lime/40 border-t border-dashed" />
-                          <span className="text-cyber-lime scale-[0.9]">Glow Path</span>
-                        </div>
-
-                        {/* Skin Energy Core on throat */}
-                        <div className="absolute bottom-[18%] right-[2%] flex items-center gap-1">
-                          <span className="text-empowerment-pink scale-[0.9]">Energy Core</span>
-                          <div className="w-8 h-[1px] bg-empowerment-pink/40 border-t border-dashed" />
-                        </div>
-
-                        {/* Active Chroma Nexus Prism Core */}
-                        <div className="absolute bottom-[4%] left-[2%] text-white/50 space-y-0.5">
-                          <div className="flex items-center gap-1 scale-[0.95] origin-left">
-                            <span className="w-1 h-1 rounded-full bg-teal-400 animate-ping" />
-                            <span className="text-teal-400 font-bold">CHROMA CORE</span>
-                          </div>
-                          <span className="text-white/30 text-[5px]">VOICE: {isSpeaking ? "ACTIVE" : "QUIET"}</span>
-                        </div>
-
-                        {/* Animated Scanner Lines Sweep (Glow Guidance) */}
-                        <motion.div
-                          animate={{ top: ["12%", "82%", "12%"] }}
-                          transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-                          className="absolute left-6 right-6 h-[1px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent opacity-30 shadow-[0_0_8px_rgba(34,211,238,0.5)]"
-                        />
-                      </div>
-
-                      {/* SPEAKING AUDIO LEVEL SPECTRUM BAR OVERLAYS */}
-                      <AnimatePresence>
-                        {isSpeaking && (
-                          <motion.div 
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            className="absolute inset-[18%] rounded-full border border-cyber-lime/30 flex items-center justify-center pointer-events-none"
-                          >
-                            <div className="flex gap-0.5 items-end h-5 text-cyber-lime/60">
-                              {[1, 2, 3, 4, 3, 2, 4, 1].map((h, i) => (
-                                <motion.div
-                                  key={i}
-                                  animate={{ height: ["15%", `${h * 15 + 25}%`, "15%"] }}
-                                  transition={{ duration: 0.3, repeat: Infinity, delay: i * 0.03 }}
-                                  className="w-[1.2px] bg-cyber-lime rounded-full"
-                                  style={{ height: "4px" }}
-                                />
-                              ))}
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
+                       <img 
+                          src="/ada_avatar.png" 
+                          alt="Ada, your AI Beauty Architect" 
+                          className="w-48 h-48 object-cover rounded-full border-2 border-cyber-lime/50 shadow-[0_0_20px_rgba(209,250,0,0.3)]"
+                       />
+                       
+                       {/* Floating Ada Response Toast for Emotion/Makeup Encouragement */}
+                       <AnimatePresence>
+                         {(realtimeFeedback) && (
+                           <motion.div 
+                             initial={{ opacity: 0, y: 20, scale: 0.9 }}
+                             animate={{ opacity: 1, y: 0, scale: 1 }}
+                             exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                             className="absolute -bottom-16 left-0 right-0 z-50 p-3 bg-black/80 backdrop-blur-xl border border-cyber-lime rounded-2xl text-center shadow-[0_0_20px_rgba(209,250,0,0.3)]"
+                           >
+                             <p className="text-white text-[9px] font-bold tracking-wide italic px-2">"{realtimeFeedback}"</p>
+                           </motion.div>
+                         )}
+                       </AnimatePresence>
                     </div>
 
                     {/* Card Footer: Detail description and operating metrics */}
@@ -699,7 +622,7 @@ export function AdaLiveView({ captureFrame, isImmersiveMode, setIsImmersiveMode 
                                 ) : (
                                   /* Scanning request activator button */
                                   <button 
-                                    onClick={startScanningAnalysis}
+                            onClick={() => { triggerHaptic(); startScanningAnalysis(); }}
                                     disabled={isFeedbackLoading}
                                     className="w-full py-1.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 flex items-center justify-center gap-1.5 text-white font-mono text-[7px] uppercase font-black tracking-widest transition-all cursor-pointer"
                                   >
@@ -710,7 +633,7 @@ export function AdaLiveView({ captureFrame, isImmersiveMode, setIsImmersiveMode 
 
                                 {/* Floating quote response block representing Ada's smart guidance feedback */}
                                 <AnimatePresence>
-                                  {mockAdaFdbk && !isScanningActive && (
+                                  {(mockAdaFdbk && !isScanningActive || realtimeFeedback) && (
                                     <motion.div 
                                       initial={{ opacity: 0, y: 3 }}
                                       animate={{ opacity: 1, y: 0 }}
@@ -718,8 +641,8 @@ export function AdaLiveView({ captureFrame, isImmersiveMode, setIsImmersiveMode 
                                     >
                                       <Cpu size={10} className="text-cyan-400 flex-shrink-0 mt-0.5" />
                                       <div className="space-y-0.5 flex-1">
-                                        <span className="font-mono text-[5.5px] text-cyan-400 font-bold uppercase tracking-widest">Ada's Vision Diagnosis</span>
-                                        <p className="text-white/90 text-[7px] leading-tight italic">"{mockAdaFdbk}"</p>
+                                        <span className="font-mono text-[5.5px] text-cyan-400 font-bold uppercase tracking-widest">{realtimeFeedback ? "Real-time Ada Guidance" : "Ada's Vision Diagnosis"}</span>
+                                        <p className="text-white/90 text-[7px] leading-tight italic">"{realtimeFeedback || mockAdaFdbk}"</p>
                                       </div>
                                     </motion.div>
                                   )}
@@ -778,6 +701,25 @@ export function AdaLiveView({ captureFrame, isImmersiveMode, setIsImmersiveMode 
 
       <div className="flex-1" />
 
+      {/* Minimalism Audio Wave Visualizer */}
+      <div className="absolute bottom-36 left-0 right-0 flex justify-center items-center gap-1.5 h-6 z-40 pointer-events-none">
+        <AnimatePresence>
+          {isSpeaking && (
+              <motion.div className="flex gap-1 items-center" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}>
+                {[...Array(6)].map((_, i) => (
+                  <motion.div
+                    key={i}
+                    initial={{ height: 4 }}
+                    animate={{ height: [4, 16 + Math.random() * 12, 4] }}
+                    transition={{ duration: 0.4, repeat: Infinity, delay: i * 0.1, ease: "easeInOut" }}
+                    className="w-1 rounded-full bg-cyber-lime shadow-[0_0_8px_rgba(209,250,0,0.5)]"
+                  />
+                ))}
+              </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
       {/* 3. CONTROL PANEL & AUDIO FEEDBACK */}
       <div className={`w-full bg-black/65 border border-white/10 p-5 rounded-[32px] backdrop-blur-xl transition-all duration-300 pointer-events-auto shadow-2xl relative z-40 ${isImmersiveMode ? "mt-auto max-w-sm mx-auto p-4 rounded-full border-white/5 bg-black/50" : ""}`}>
         <div className="flex items-center justify-between gap-3">
@@ -795,7 +737,7 @@ export function AdaLiveView({ captureFrame, isImmersiveMode, setIsImmersiveMode 
             {/* Immersive Screen HUD Toggle */}
             {!showDisclaimer && (
               <button
-                onClick={() => setIsImmersiveMode(!isImmersiveMode)}
+                onClick={() => { triggerHaptic(); setIsImmersiveMode(!isImmersiveMode); }}
                 className={`p-3 rounded-full border transition-all pointer-events-auto cursor-pointer ${
                   isImmersiveMode
                     ? "bg-cyber-lime border-cyber-lime text-onyx shadow-[0_0_15px_rgba(209,250,0,0.5)]"
@@ -808,7 +750,7 @@ export function AdaLiveView({ captureFrame, isImmersiveMode, setIsImmersiveMode 
             )}
 
             <button 
-              onClick={showDisclaimer ? activateLive : () => setIsAudioMuted(!isAudioMuted)}
+              onClick={() => { triggerHaptic(); showDisclaimer ? activateLive() : setIsAudioMuted(!isAudioMuted); }}
               className={`p-3 rounded-full border transition-all pointer-events-auto cursor-pointer ${
                 showDisclaimer
                   ? "bg-cyber-lime border-cyber-lime text-onyx animate-pulse shadow-[0_0_15px_rgba(209,250,0,0.5)]"

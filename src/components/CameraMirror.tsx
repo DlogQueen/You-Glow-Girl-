@@ -717,14 +717,14 @@ export const CameraMirror = forwardRef<CameraMirrorHandle, CameraMirrorProps>(({
             key="dermal-matrix"
             className="absolute inset-0 pointer-events-none flex items-center justify-center z-10"
             initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: hasFace ? 0.05 : 0.7, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.4, ease: "easeOut" } }}
+            animate={{ opacity: hasFace ? 0.05 : 0.3, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.8, ease: "easeInOut" } }}
           >
             <svg viewBox="0 0 400 500" className="w-full max-w-sm h-auto drop-shadow-[0_0_15px_rgba(225,255,0,0.6)]">
               <defs>
                 <linearGradient id="meshGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#E1FF00" stopOpacity="0.2" />
-                  <stop offset="100%" stopColor="#E1FF00" stopOpacity="0.8" />
+                  <stop offset="0%" stopColor="#E1FF00" stopOpacity="0.1" />
+                  <stop offset="100%" stopColor="#E1FF00" stopOpacity="0.4" />
                 </linearGradient>
               </defs>
               
@@ -734,7 +734,7 @@ export const CameraMirror = forwardRef<CameraMirrorHandle, CameraMirrorProps>(({
                 transition={{ duration: 1 }}
               >
                 {/* Forehead, Cheeks, Contour (Face category) */}
-                <g stroke={selectedColors?.face || "#E1FF00"} strokeWidth="0.75" fill="none" strokeOpacity="0.4">
+                <g stroke={selectedColors?.face || "#E1FF00"} strokeWidth="0.5" fill="none" strokeOpacity="0.2">
                   {/* Forehead */}
                   <path d="M200 80 L240 90 L280 120 L200 120 L120 120 L160 90 Z" />
                   <path d="M200 80 L200 120" />
@@ -749,13 +749,13 @@ export const CameraMirror = forwardRef<CameraMirrorHandle, CameraMirrorProps>(({
                     animate={{ pathLength: 1 }}
                     transition={{ duration: 3, ease: "easeInOut" }}
                     d="M200 80 L280 120 L310 220 L270 340 L200 410 L130 340 L90 220 L120 120 Z" 
-                    strokeWidth="2"
-                    strokeOpacity="1"
+                    strokeWidth="1.5"
+                    strokeOpacity="0.5"
                   />
                 </g>
 
                 {/* Eyes & Brows (Eyes category) */}
-                <g stroke={selectedColors?.eyes || "#E1FF00"} strokeWidth="0.75" fill="none" strokeOpacity="0.4">
+                <g stroke={selectedColors?.eyes || "#E1FF00"} strokeWidth="0.5" fill="none" strokeOpacity="0.2">
                   <path d="M120 120 L160 140 L200 120 L240 140 L280 120" />
                   <path d="M160 140 L200 160 L240 140" />
                   <path d="M160 140 L160 180 L200 160" />
@@ -763,7 +763,7 @@ export const CameraMirror = forwardRef<CameraMirrorHandle, CameraMirrorProps>(({
                 </g>
 
                 {/* Mouth & Jaw (Lips category) */}
-                <g stroke={selectedColors?.lips || "#E1FF00"} strokeWidth="0.75" fill="none" strokeOpacity="0.4">
+                <g stroke={selectedColors?.lips || "#E1FF00"} strokeWidth="0.5" fill="none" strokeOpacity="0.2">
                   <path d="M130 340 L160 300 L200 310 L240 300 L270 340" />
                   <path d="M160 300 L160 360 L200 380 L240 360 L240 300" />
                   <path d="M200 310 L200 380" />
