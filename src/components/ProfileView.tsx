@@ -114,6 +114,35 @@ export function ProfileView() {
   // Refs for camera preview
   const profileCameraVideoRef = useState<any>(null); // We can bind it dynamically or track stream state
 
+  // Gemini dynamic models pull states
+  const [geminiModels, setGeminiModels] = useState<any[]>([]);
+  const [isLoadingModels, setIsLoadingModels] = useState(false);
+  const [isApiKeyConfigured, setIsApiKeyConfigured] = useState<boolean | null>(null);
+  const [modelsError, setModelsError] = useState<string | null>(null);
+
+  const fetchGeminiModels = async () => {
+    setIsLoadingModels(true);
+    setModelsError(null);
+    try {
+      const response = await fetch("/api/gemini-models");
+      if (!response.ok) {
+        throw new Error("Failed to contact backend service.");
+      }
+      const data = await response.json();
+      setGeminiModels(data.models || []);
+      setIsApiKeyConfigured(data.apiKeyConfigured);
+    } catch (err: any) {
+      console.error("Error fetching Gemini models in UI:", err);
+      setModelsError(err.message || "Unable to load models from server");
+    } finally {
+      setIsLoadingModels(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchGeminiModels();
+  }, []);
+
   useEffect(() => {
     if (profile) {
       setLocalBio(profile.bio || "");
@@ -1303,6 +1332,97 @@ export function ProfileView() {
                       </button>
                     </div>
                   </div>
+                </div>
+
+                {/* Dynamic Gemini Cloud Registry */}
+                <div className="bg-white/5 border border-white/10 rounded-[32px] p-6 space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-white font-display font-bold text-xl tracking-tight">AI Cognitive Engines</h3>
+                      <p className="text-white/40 text-[10px] font-mono uppercase tracking-wider">Dynamic Google Cloud Registry</p>
+                    </div>
+                    <button 
+                      onClick={fetchGeminiModels}
+                      disabled={isLoadingModels}
+                      className="p-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-white hover:text-cyber-lime active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+                      title="Sync available cognitive models"
+                    >
+                      <RefreshCw size={13} className={isLoadingModels ? "animate-spin text-cyber-lime" : ""} />
+                    </button>
+                  </div>
+
+                  {/* Status Indicator */}
+                  <div className="flex items-center gap-3 p-3 bg-black/45 rounded-2xl border border-white/5 font-mono text-[9px] uppercase tracking-wider">
+                    <span className="relative flex h-2 w-2">
+                      <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isApiKeyConfigured ? "bg-cyber-lime" : "bg-orange-500"}`}></span>
+                      <span className={`relative inline-flex rounded-full h-2 w-2 ${isApiKeyConfigured ? "bg-cyber-lime" : "bg-orange-500"}`}></span>
+                    </span>
+                    <div className="flex-1">
+                      <span className="text-white/40">Credential Status: </span>
+                      <span className={isApiKeyConfigured ? "text-cyber-lime font-bold" : "text-orange-400 font-bold"}>
+                        {isApiKeyConfigured ? "VERIFIED GOOGLE CLOUD FUNDING LINKED" : "SANDBOX / DEV KEY IN USE"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {modelsError && (
+                    <div className="p-3 bg-red-950/20 border border-red-500/20 text-red-400 rounded-2xl text-[10px] font-mono leading-tight">
+                      ⚠️ {modelsError}
+                    </div>
+                  )}
+
+                  {/* Scrollable Model Cards */}
+                  <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1 no-scrollbar">
+                    {geminiModels.map((model, idx) => (
+                      <div 
+                        key={model.name || idx} 
+                        className="p-4 bg-black/20 rounded-2xl border border-white/5 hover:border-white/15 transition-all space-y-2 group"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="space-y-0.5">
+                            <h4 className="text-white text-xs font-bold leading-tight flex items-center gap-1.5">
+                              {model.displayName}
+                              {model.isFallback && (
+                                <span className="px-1.5 py-0.5 bg-white/5 text-white/50 text-[7px] font-mono uppercase tracking-wider rounded border border-white/5">
+                                  Default
+                                </span>
+                              )}
+                            </h4>
+                            <p className="text-white/30 text-[8px] font-mono lowercase truncate max-w-[200px]">
+                              {model.name}
+                            </p>
+                          </div>
+                          
+                          <div className="w-4 h-4 rounded-full border border-cyber-lime/40 group-hover:bg-cyber-lime/10 flex items-center justify-center text-cyber-lime transition-all">
+                            <Check size={8} strokeWidth={3} />
+                          </div>
+                        </div>
+
+                        <p className="text-white/60 text-[10px] leading-relaxed">
+                          {model.description}
+                        </p>
+
+                        {/* Badges for Capability */}
+                        {model.supportedGenerationMethods && model.supportedGenerationMethods.length > 0 && (
+                          <div className="flex flex-wrap gap-1 pt-1">
+                            {model.supportedGenerationMethods.map((method: string, mIdx: number) => {
+                              const cleanMethod = method.split("/").pop() || method;
+                              if (!cleanMethod.includes("generate") && !cleanMethod.includes("predict")) return null;
+                              return (
+                                <span key={mIdx} className="px-1.5 py-0.5 bg-cyber-lime/5 text-cyber-lime text-[7px] font-mono uppercase tracking-widest rounded border border-cyber-lime/10 font-bold">
+                                  ✓ {cleanMethod}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  <p className="text-white/20 text-[9px] font-mono text-center leading-relaxed">
+                    Models retrieved dynamically via @google/genai client using linked Google Cloud developer credentials.
+                  </p>
                 </div>
 
                 <div className="space-y-4">

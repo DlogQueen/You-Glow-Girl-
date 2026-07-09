@@ -122,22 +122,23 @@ export async function queryVertexDataStore(query: string) {
 }
 
 export async function generateContentAI(message: string, image?: string, systemInstruction?: string) {
-  const ai = getAI();
-  
+  const apiKey = process.env.OPENROUTER_API_KEY || process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error('OPENROUTER_API_KEY environment variable is required');
+  }
+
   const parts: any[] = [];
   
   if (image && typeof image === "string" && image.trim().length > 0) {
     const { mimeType, base64Data } = parseDataUrl(image);
     
-    // Validate that we have a non-empty, reasonably sized, and characters-wise valid base64 payload
-    // Valid Base64 consists of A-Z, a-z, 0-9, +, /, and pad =
     const isValidBase64 = base64Data.length > 150 && /^[A-Za-z0-9+/=]+$/.test(base64Data);
     
     if (isValidBase64) {
       parts.push({
-        inlineData: {
-          mimeType,
-          data: base64Data
+        type: "image_url",
+        image_url: {
+          url: `data:${mimeType};base64,${base64Data}`
         }
       });
     } else {
@@ -145,7 +146,7 @@ export async function generateContentAI(message: string, image?: string, systemI
     }
   }
   
-  parts.push({ text: message });
+  parts.push({ type: "text", text: message });
 
   // 1. Check if there is Vertex AI Search Data Store Grounding to fetch
   const dataStoreId = process.env.VERTEX_DATA_STORE_ID;
@@ -165,11 +166,11 @@ export async function generateContentAI(message: string, image?: string, systemI
     ? `${systemInstruction}${dataStoreGrounding}` 
     : `You are Ada, an elite beauty tech expert and digital pioneer trained on female tech pioneers. Named after mathematician Ada Lovelace. ${dataStoreGrounding}`;
 
-  // 2. Allow executing custom fine-tuned model path (e.g. from Vertex Tuned Models)
-  const chosenModel = process.env.GEMINI_MODEL || "gemini-3.5-flash";
+  const chosenModel = process.env.MODEL || process.env.OPENROUTER_MODEL || "google/gemini-flash-1.5";
+  const fallbackModel = process.env.MODEL2 || "google/gemini-pro-1.5";
   
   // Resilient model try sequence with retry exponential backoff
-  const modelsToTry = [chosenModel, "gemini-3.1-flash-lite", "gemini-flash-latest"];
+  const modelsToTry = [chosenModel, fallbackModel, "google/gemini-flash-1.5-8b"];
   let finalResponse = null;
   let lastError: any = null;
 
@@ -178,17 +179,39 @@ export async function generateContentAI(message: string, image?: string, systemI
     const maxRetries = 3;
     while (attempt <= maxRetries) {
       try {
-        console.log(`[Gemini SDK Request] Trying model: "${modelId}" (Attempt ${attempt}/${maxRetries})`);
-        const response = await ai.models.generateContent({
-          model: modelId,
-          contents: [{ role: 'user', parts }],
-          config: {
-            systemInstruction: finalInstruction,
-            temperature: 0.7,
-          }
+        console.log(`[OpenRouter API Request] Trying model: "${modelId}" (Attempt ${attempt}/${maxRetries})`);
+        
+        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://aistudio.google.com", 
+            "X-Title": "Ada Glow"
+          },
+          body: JSON.stringify({
+            model: modelId,
+            messages: [
+              { role: "system", content: finalInstruction },
+              { role: "user", content: parts }
+            ],
+            temperature: 0.7
+          })
         });
-        finalResponse = response;
-        break; // Success! Break out of the retry loop.
+
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(`OpenRouter API Error (${response.status}): ${errText}`);
+        }
+
+        const data = await response.json();
+        
+        if (data.choices && data.choices.length > 0) {
+           finalResponse = data;
+           break; // Success! Break out of the retry loop.
+        } else {
+           throw new Error("Invalid response from OpenRouter API.");
+        }
       } catch (err: any) {
         lastError = err;
         const errMsg = String(err.message || "").toLowerCase();
@@ -199,10 +222,9 @@ export async function generateContentAI(message: string, image?: string, systemI
                             errMsg.includes("rate limit") || 
                             errMsg.includes("overloaded");
         
-        console.warn(`[Gemini API Warning] Attempt ${attempt}/${maxRetries} with model ${modelId} triggered error:`, err);
+        console.warn(`[OpenRouter API Warning] Attempt ${attempt}/${maxRetries} with model ${modelId} triggered error:`, err);
 
         if (!isTransient) {
-          // If it is a structural or permission/auth error, throw immediately
           throw err;
         }
 
@@ -216,12 +238,12 @@ export async function generateContentAI(message: string, image?: string, systemI
     if (finalResponse) {
       break; // Success! Break out of model sequence.
     }
-    console.warn(`[Gemini API Fallback] Model "${modelId}" overloaded or failed after all retries. Attempting next stable model...`);
+    console.warn(`[OpenRouter API Fallback] Model "${modelId}" overloaded or failed after all retries. Attempting next stable model...`);
   }
 
   if (!finalResponse) {
     throw lastError || new Error("All fallback models exhausted due to high API demand.");
   }
 
-  return finalResponse.text || 'No response from Ada.';
+  return finalResponse.choices[0].message.content || 'No response from Ada.';
 }

@@ -5,8 +5,9 @@ import {
   Info, Shield, Layers, Eye, EyeOff, Cpu, ChevronRight, ChevronLeft, 
   Play, ArrowLeft, Check, Loader2, Award
 } from "lucide-react";
-import { pcmToBase64, playAudioChunk, resetAudioSchedule } from "../lib/audio";
 import { triggerHaptic } from "../lib/haptics";
+import { useSpeech } from "../hooks/useSpeech";
+import { useFirebase } from "../lib/FirebaseProvider";
 
 interface AdaLiveViewProps {
   captureFrame: () => string | null;
@@ -113,13 +114,13 @@ const TUTORIALS = [
 type OperatingMode = "glow_guide" | "clinical_studio" | "beauty_counter" | "runway_backstage" | "digital_agency";
 
 export function AdaLiveView({ captureFrame, isImmersiveMode, setIsImmersiveMode }: AdaLiveViewProps) {
+  const { profile } = useFirebase();
   const [error, setError] = useState<string | null>(null);
   const [isAudioMuted, setIsAudioMuted] = useState(true);
   const [isLiveActive, setIsLiveActive] = useState(false);
   const [agreeMistakes, setAgreeMistakes] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
   const [activeMode, setActiveMode] = useState<OperatingMode>("glow_guide");
   
   // Tutorial specific states
@@ -157,105 +158,92 @@ export function AdaLiveView({ captureFrame, isImmersiveMode, setIsImmersiveMode 
     }, 80);
   };
 
-  const wsRef = useRef<WebSocket | null>(null);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const processorRef = useRef<ScriptProcessorNode | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const frameIntervalRef = useRef<any>(null);
+  const { 
+    isListening, 
+    isSpeaking, 
+    startListening, 
+    stopListening, 
+    speak, 
+    cancelSpeech 
+  } = useSpeech({
+    onResult: async (text) => {
+      if (isAudioMuted) return;
+      
+      try {
+        const frame = captureFrame();
+        const base64Data = frame ? frame : null;
+        
+        setIsFeedbackLoading(true);
+        const response = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: text,
+            image: base64Data,
+            profile: profile ? {
+              displayName: profile.displayName,
+              pronouns: profile.pronouns,
+              bio: profile.bio,
+              goals: profile.beautyGoal || profile.goals,
+              facialMetrics: profile.facialMetrics,
+            } : undefined
+          }),
+        });
+        
+        const data = await response.json();
+        if (data.reply) {
+          setRealtimeFeedback(data.reply);
+          if (!isAudioMuted) {
+            speak(data.reply);
+          }
+        }
+      } catch (err) {
+        console.error("Live API Error:", err);
+      } finally {
+        setIsFeedbackLoading(false);
+      }
+    },
+    onError: () => {
+      if (isLiveActive && !isAudioMuted) {
+         // Auto-resume listening on error/timeout
+         setTimeout(startListening, 500);
+      }
+    }
+  });
 
   const activateLive = () => {
     setAgreeMistakes(true);
     setShowDisclaimer(false);
     setIsLiveActive(true);
     setIsAudioMuted(false);
+    setIsConnected(true);
+    startListening();
   };
 
   useEffect(() => {
-    if (!isLiveActive) return;
+    if (isLiveActive && !isAudioMuted && !isSpeaking && !isListening && !isFeedbackLoading) {
+      const timer = setTimeout(() => {
+        startListening();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [isLiveActive, isAudioMuted, isSpeaking, isListening, isFeedbackLoading, startListening]);
 
-    let ws: WebSocket;
-    
-    const initLiveApi = async () => {
-      try {
-        const audioCtx = new AudioContext({ sampleRate: 16000 });
-        audioCtxRef.current = audioCtx;
-        resetAudioSchedule();
+  useEffect(() => {
+    if (isAudioMuted) {
+      stopListening();
+      cancelSpeech();
+    } else if (isLiveActive && !isSpeaking) {
+      startListening();
+    }
+  }, [isAudioMuted, isLiveActive]);
 
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        streamRef.current = stream;
-
-        const source = audioCtx.createMediaStreamSource(stream);
-        const processor = audioCtx.createScriptProcessor(4096, 1, 1);
-        processorRef.current = processor;
-        
-        source.connect(processor);
-        processor.connect(audioCtx.destination);
-
-        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        ws = new WebSocket(`${wsProtocol}//${window.location.host}/live`);
-        wsRef.current = ws;
-
-        let speakingTimeout: any = null;
-
-        ws.onopen = () => {
-          setIsConnected(true);
-        };
-
-        ws.onmessage = (event) => {
-          const msg = JSON.parse(event.data);
-          if (msg.audio && !isAudioMuted) {
-             setIsSpeaking(true);
-             playAudioChunk(audioCtx, msg.audio);
-             if (speakingTimeout) clearTimeout(speakingTimeout);
-             speakingTimeout = setTimeout(() => setIsSpeaking(false), 800);
-          }
-          if (msg.makeup_feedback) {
-            setRealtimeFeedback(msg.makeup_feedback);
-          }
-          if (msg.interrupted) {
-             resetAudioSchedule();
-          }
-        };
-
-        ws.onclose = () => {
-          setIsConnected(false);
-        };
-
-        processor.onaudioprocess = (e) => {
-          if (ws.readyState === WebSocket.OPEN && !isAudioMuted) {
-             const base64 = pcmToBase64(e.inputBuffer.getChannelData(0));
-             ws.send(JSON.stringify({ audio: base64 }));
-          }
-        };
-
-        frameIntervalRef.current = setInterval(() => {
-          if (ws.readyState === WebSocket.OPEN) {
-            const frame = captureFrame();
-            if (frame) {
-                const base64Data = frame.split(',')[1];
-                if (base64Data) {
-                   ws.send(JSON.stringify({ video: base64Data }));
-                }
-            }
-          }
-        }, 500);
-        
-      } catch (err: any) {
-        console.warn("Live API initialization caught gracefully:", err);
-        setError("Mic or brain server link failed, sister pioneer. Please authorize mic access!");
-      }
-    };
-
-    initLiveApi();
-
+  useEffect(() => {
     return () => {
-       if (wsRef.current) wsRef.current.close();
-       if (processorRef.current) processorRef.current.disconnect();
-       if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
-       if (audioCtxRef.current) audioCtxRef.current.close();
-       if (frameIntervalRef.current) clearInterval(frameIntervalRef.current);
+      stopListening();
+      cancelSpeech();
     };
-  }, [captureFrame, isAudioMuted, isLiveActive]);
+  }, []);
 
   // Mode configurations reflecting your exact images!
   const modesData = {

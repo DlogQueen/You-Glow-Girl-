@@ -16,7 +16,7 @@ const ADA_SYSTEM_INSTRUCTION = fs.existsSync(soulPath)
 
 app.use(express.json({ limit: '10mb' }));
 
-import { generateContentAI } from "./src/lib/gemini.server";
+import { generateContentAI, getAI } from "./src/lib/gemini.server";
 
 // API Chat Endpoint
 app.post("/api/chat", async (req, res) => {
@@ -175,6 +175,73 @@ app.post("/api/tts", async (req, res) => {
   }
 });
 
+// API Dynamic Models Pull Endpoint
+app.get("/api/gemini-models", async (req, res) => {
+  try {
+    const apiKey = process.env.OPENROUTER_API_KEY || process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.json({
+        models: [
+          { name: "google/gemini-flash-1.5", displayName: "Gemini Flash 1.5", description: "Standard, balanced text and reasoning tasks", isFallback: true },
+          { name: "google/gemini-flash-1.5-8b", displayName: "Gemini Flash 1.5 8B", description: "Cost-efficient, super-fast model", isFallback: true },
+          { name: "google/gemini-pro-1.5", displayName: "Gemini Pro 1.5", description: "Advanced reasoning, complex makeup profiles", isFallback: true }
+        ],
+        apiKeyConfigured: false
+      });
+    }
+
+    const response = await fetch("https://openrouter.ai/api/v1/models", {
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "HTTP-Referer": "https://aistudio.google.com",
+        "X-Title": "Ada Glow"
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenRouter API returned ${response.status}`);
+    }
+    
+    const data = await response.json();
+    const modelsArray = data.data || [];
+
+    const mappedModels = modelsArray.map((m: any) => ({
+      name: m.id || "",
+      displayName: m.name || m.id?.split("/").pop() || "AI Model",
+      description: m.description || `Context length: ${m.context_length}. Pricing: $${m.pricing?.prompt}/$${m.pricing?.completion} per 1M tokens.`,
+      supportedGenerationMethods: [], // OpenRouter doesn't expose this in the same way
+      isFallback: false
+    })).filter((m: any) => m.name.includes("google") || m.name.includes("gemini") || m.name.includes("openai") || m.name.includes("anthropic"));
+
+    if (mappedModels.length === 0) {
+      return res.json({
+        models: [
+          { name: "google/gemini-flash-1.5", displayName: "Gemini Flash 1.5", description: "Standard, balanced text and reasoning tasks", isFallback: false },
+          { name: "google/gemini-flash-1.5-8b", displayName: "Gemini Flash 1.5 8B", description: "Cost-efficient, super-fast model", isFallback: false },
+          { name: "google/gemini-pro-1.5", displayName: "Gemini Pro 1.5", description: "Advanced reasoning, complex makeup profiles", isFallback: false }
+        ],
+        apiKeyConfigured: true
+      });
+    }
+
+    res.json({
+      models: mappedModels,
+      apiKeyConfigured: true
+    });
+  } catch (error: any) {
+    console.error("Error listing OpenRouter models from API key:", error);
+    res.json({
+      models: [
+        { name: "google/gemini-flash-1.5", displayName: "Gemini Flash 1.5", description: "Standard, balanced text and reasoning tasks", isFallback: true },
+        { name: "google/gemini-flash-1.5-8b", displayName: "Gemini Flash 1.5 8B", description: "Cost-efficient, super-fast model", isFallback: true },
+        { name: "google/gemini-pro-1.5", displayName: "Gemini Pro 1.5", description: "Advanced reasoning, complex makeup profiles", isFallback: true }
+      ],
+      apiKeyConfigured: false,
+      error: error.message || "Failed to query live OpenRouter registry."
+    });
+  }
+});
+
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
@@ -198,7 +265,7 @@ async function startServer() {
   const wss = new WebSocketServer({ server, path: "/live" });
 
   const ai = new GoogleGenAI({
-    apiKey: process.env.GEMINI_API_KEY,
+    apiKey: process.env.GEMINI_API_KEY || 'missing-key',
     httpOptions: {
       headers: {
         'User-Agent': 'aistudio-build',
