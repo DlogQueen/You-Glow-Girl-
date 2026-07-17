@@ -1,124 +1,22 @@
-import { GoogleGenAI } from "@google/genai";
-import { GoogleAuth } from "google-auth-library";
-
-let aiClient: GoogleGenAI | null = null;
-
-export function getAI() {
-  if (!aiClient) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new Error('GEMINI_API_KEY environment variable is required');
-    }
-    aiClient = new GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        }
-      }
-    });
-  }
-  return aiClient;
-}
 
 function parseDataUrl(dataUrl: string) {
   if (!dataUrl) {
     return { mimeType: "image/jpeg", base64Data: "" };
   }
   const trimmed = dataUrl.trim();
-  // Matching with [\s\S]+ allows multi-line base64 payloads to parse correctly
   const match = trimmed.match(/^data:([^;]+);base64,([\s\S]+)$/);
   if (match) {
     return {
       mimeType: match[1],
-      // Strip all formatting whitespace, line breaks, or carriage returns from base64 string
       base64Data: match[2].replace(/[\s\r\n]+/g, "")
     };
   }
   
-  // Safe fallback if it's purely base64 or has a custom/different structure
   const cleanData = trimmed.includes(",") ? trimmed.split(",")[1] : trimmed;
   return {
     mimeType: "image/jpeg",
     base64Data: cleanData.replace(/[\s\r\n]+/g, "")
   };
-}
-
-export async function queryVertexDataStore(query: string) {
-  const projectId = process.env.GOOGLE_CLOUD_PROJECT || "gen-lang-client-0871747406";
-  const location = process.env.GOOGLE_CLOUD_LOCATION || "us-central1";
-  const dataStoreId = process.env.VERTEX_DATA_STORE_ID;
-
-  if (!dataStoreId) {
-    console.log("No Vertex Data Store ID configured. Skipping Data Store search grounding.");
-    return null;
-  }
-
-  try {
-    const auth = new GoogleAuth({
-      scopes: ["https://www.googleapis.com/auth/cloud-platform"]
-    });
-    const client = await auth.getClient();
-    const tokenResponse = await client.getAccessToken();
-    const accessToken = tokenResponse.token;
-
-    if (!accessToken) {
-      console.warn("Unable to obtain Google Cloud OAuth access token for Vertex Search.");
-      return null;
-    }
-
-    const url = `https://discoveryengine.googleapis.com/v1beta/projects/${projectId}/locations/${location}/dataStores/${dataStoreId}/servingConfigs/default_serving_config:search`;
-
-    const payload = {
-      query,
-      pageSize: 3,
-      contentSearchSpec: {
-        snippetSpec: {
-          maxSnippetCount: 2
-        }
-      }
-    };
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) {
-      if (response.status === 403 || response.status === 401) {
-        // Silently skip Vertex Grounding when permissions are missing to prevent alarming console logs
-        return null;
-      }
-      const errText = await response.text();
-      console.warn(`Vertex Search API error (${response.status}):`, errText);
-      return null;
-    }
-
-    const data: any = await response.json();
-    const results = data.results || [];
-    
-    return results.map((r: any) => {
-      const document = r.document || {};
-      const derivedStructData = document.derivedStructData || {};
-      const snippetsList = derivedStructData.snippets || [];
-      const title = derivedStructData.title || document.id || "Verified Info";
-      const link = derivedStructData.link || "";
-      const textFromSnippets = snippetsList.map((s: any) => s.snippet).join("\n");
-      return {
-        title,
-        link,
-        content: textFromSnippets || JSON.stringify(derivedStructData)
-      };
-    }).filter((s: any) => s.content && s.content.trim().length > 0);
-
-  } catch (err) {
-    console.warn("Exception while calling Vertex Search:", err);
-    return null;
-  }
 }
 
 export async function generateContentAI(message: string, image?: string, systemInstruction?: string) {
@@ -148,28 +46,13 @@ export async function generateContentAI(message: string, image?: string, systemI
   
   parts.push({ type: "text", text: message });
 
-  // 1. Check if there is Vertex AI Search Data Store Grounding to fetch
-  const dataStoreId = process.env.VERTEX_DATA_STORE_ID;
-  let dataStoreGrounding = "";
-  if (dataStoreId) {
-    const snippets = await queryVertexDataStore(message);
-    if (snippets && snippets.length > 0) {
-      dataStoreGrounding = "\n\n[VERTEX DATA STORE DETAILS - USE THIS FOR RELEVANT VERIFIED DETAILS]:\n";
-      snippets.forEach((s: any, idx: number) => {
-        dataStoreGrounding += `Source ${idx + 1}: ${s.title}\nInfo: ${s.content}\nURL: ${s.link || 'N/A'}\n\n`;
-      });
-      dataStoreGrounding += "Reference these verified product/routine specifics dynamically while keeping your persona active.";
-    }
-  }
-
   const finalInstruction = systemInstruction 
-    ? `${systemInstruction}${dataStoreGrounding}` 
-    : `You are Ada, an elite beauty tech expert and digital pioneer trained on female tech pioneers. Named after mathematician Ada Lovelace. ${dataStoreGrounding}`;
+    ? systemInstruction 
+    : "You are Ada, an elite beauty tech expert and digital pioneer trained on female tech pioneers. Named after mathematician Ada Lovelace.";
 
-  const chosenModel = process.env.MODEL || process.env.OPENROUTER_MODEL || "google/gemini-flash-1.5";
-  const fallbackModel = process.env.MODEL2 || "google/gemini-pro-1.5";
+  const chosenModel = process.env.MODEL || process.env.OPENROUTER_MODEL || "google/gemini-2.0-flash-001";
+  const fallbackModel = process.env.MODEL2 || "google/gemini-flash-1.5";
   
-  // Resilient model try sequence with retry exponential backoff
   const modelsToTry = [chosenModel, fallbackModel, "google/gemini-flash-1.5-8b"];
   let finalResponse = null;
   let lastError: any = null;
@@ -208,7 +91,7 @@ export async function generateContentAI(message: string, image?: string, systemI
         
         if (data.choices && data.choices.length > 0) {
            finalResponse = data;
-           break; // Success! Break out of the retry loop.
+           break;
         } else {
            throw new Error("Invalid response from OpenRouter API.");
         }
@@ -230,13 +113,13 @@ export async function generateContentAI(message: string, image?: string, systemI
 
         attempt++;
         if (attempt <= maxRetries) {
-          const waitTime = Math.pow(2, attempt) * 600; // Exponential backoff
+          const waitTime = Math.pow(2, attempt) * 600;
           await new Promise((resolve) => setTimeout(resolve, waitTime));
         }
       }
     }
     if (finalResponse) {
-      break; // Success! Break out of model sequence.
+      break;
     }
     console.warn(`[OpenRouter API Fallback] Model "${modelId}" overloaded or failed after all retries. Attempting next stable model...`);
   }

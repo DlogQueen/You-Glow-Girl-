@@ -126,12 +126,11 @@ export function useSpeech({ onResult, onEnd, onError, language = 'en-US' }: UseS
         // The network request was aborted intentionally because a new TTS call came in.
         return; 
       }
-      console.error("ElevenLabs TTS failed, falling back to browser TTS", e);
+      console.error("Network TTS failed, falling back to browser TTS", e);
     }
 
     if (speakIdRef.current !== currentSpeakId) return;
 
-    // Fallback to Browser SpeechSynthesis
     if (!synthesisRef.current) {
       setIsSpeaking(false);
       return;
@@ -142,9 +141,22 @@ export function useSpeech({ onResult, onEnd, onError, language = 'en-US' }: UseS
     utterance.pitch = 1.2;
     utterance.rate = 1.1;
 
+    // Try to find a good female voice (e.g. Google UK English Female, or similar)
+    const voices = synthesisRef.current.getVoices();
+    const preferredVoice = voices.find(v => v.name.includes('Female') || v.name.includes('Samantha') || v.name.includes('Google UK English Female') || v.name.includes('Victoria') || v.name.includes('Karen') || (v.lang.startsWith('en') && v.name.includes('Zira')));
+    if (preferredVoice) {
+      utterance.voice = preferredVoice;
+    }
+
     utterance.onend = () => {
       if (speakIdRef.current === currentSpeakId) setIsSpeaking(false);
     };
+    
+    utterance.onerror = (e) => {
+      console.error("Speech synthesis error", e);
+      if (speakIdRef.current === currentSpeakId) setIsSpeaking(false);
+    }
+    
     synthesisRef.current.speak(utterance);
   }, [language]);
 

@@ -414,10 +414,17 @@ export function AdaLiveView({ captureFrame, isImmersiveMode, setIsImmersiveMode 
             {!isImmersiveMode && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
+                animate={{ 
+                  opacity: 1, 
+                  scale: 1,
+                  borderColor: isSpeaking ? modesData[activeMode].accent : "rgba(255, 255, 255, 0.15)",
+                  boxShadow: isSpeaking 
+                    ? `0 0 20px ${modesData[activeMode].accent}33`
+                    : "0 25px 50px -12px rgba(0, 0, 0, 0.5)"
+                }}
                 exit={{ opacity: 0, scale: 0.95 }}
                 transition={{ duration: 0.3 }}
-                className="relative w-72 h-[340px] rounded-[48px] bg-black/40 border border-white/15 overflow-hidden backdrop-blur-md flex flex-col justify-between p-5 pointer-events-auto shadow-2xl"
+                className="relative w-72 h-[340px] rounded-[48px] bg-black/40 border overflow-hidden backdrop-blur-md flex flex-col justify-between p-5 pointer-events-auto"
               >
                 
                 {/* Holographic grid lines backplane */}
@@ -709,7 +716,14 @@ export function AdaLiveView({ captureFrame, isImmersiveMode, setIsImmersiveMode 
       </div>
 
       {/* 3. CONTROL PANEL & AUDIO FEEDBACK */}
-      <div className={`w-full bg-black/65 border border-white/10 p-5 rounded-[32px] backdrop-blur-xl transition-all duration-300 pointer-events-auto shadow-2xl relative z-40 ${isImmersiveMode ? "mt-auto max-w-sm mx-auto p-4 rounded-full border-white/5 bg-black/50" : ""}`}>
+      <motion.div 
+        animate={{
+          borderColor: isSpeaking ? modesData[activeMode].accent : "rgba(255, 255, 255, 0.15)",
+          boxShadow: isSpeaking 
+            ? `0 0 20px ${modesData[activeMode].accent}33`
+            : "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)"
+        }}
+        className={`w-full bg-black/65 border p-5 rounded-[32px] backdrop-blur-xl transition-all duration-300 pointer-events-auto shadow-2xl relative z-40 ${isImmersiveMode ? "mt-auto max-w-sm mx-auto p-4 rounded-full border-white/5 bg-black/50" : ""}`}>
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="relative flex h-3 w-3">
@@ -784,7 +798,7 @@ export function AdaLiveView({ captureFrame, isImmersiveMode, setIsImmersiveMode 
               <p className="font-semibold">{error}</p>
             </motion.div>
         )}
-      </div>
+      </motion.div>
     </div>
   );
 }

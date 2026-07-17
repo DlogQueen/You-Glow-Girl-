@@ -2,8 +2,6 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
-import { WebSocketServer } from "ws";
-import { GoogleGenAI, LiveServerMessage, Modality } from "@google/genai";
 
 const app = express();
 const PORT = 3000;
@@ -16,7 +14,7 @@ const ADA_SYSTEM_INSTRUCTION = fs.existsSync(soulPath)
 
 app.use(express.json({ limit: '10mb' }));
 
-import { generateContentAI, getAI } from "./src/lib/gemini.server";
+import { generateContentAI } from "./src/lib/gemini.server";
 
 // API Chat Endpoint
 app.post("/api/chat", async (req, res) => {
@@ -40,18 +38,18 @@ app.post("/api/chat", async (req, res) => {
     const reply = await generateContentAI(message, image, customInstruction);
     res.json({ reply });
   } catch (error: any) {
-    console.error("Gemini AI Error:", error);
+    console.error("AI Error:", error);
     
     // Check for missing credentials
-    if (error.message?.includes('GEMINI_API_KEY')) {
-      res.status(500).json({ reply: "Sister Pioneer, I need you to connect my Gemini brain! Please add GEMINI_API_KEY to the Secrets panel in AI Studio settings." });
+    if (error.message?.includes('API_KEY')) {
+      res.status(500).json({ reply: "Sister Pioneer, I need you to connect my brain! Please add the necessary API_KEY to the Secrets panel in AI Studio settings." });
       return;
     }
 
     if (error.status === 429) {
-      res.status(429).json({ reply: "Let's pause, babe! My Gemini brain has hit its quota limit." });
+      res.status(429).json({ reply: "Let's pause, babe! My brain has hit its quota limit." });
     } else {
-      res.status(500).json({ reply: "Babe, my Gemini circuit is playing games!" });
+      res.status(500).json({ reply: "Babe, my circuit is playing games!" });
     }
   }
 });
@@ -133,58 +131,74 @@ app.post("/api/analyze-face", async (req, res) => {
 
 app.post("/api/tts", async (req, res) => {
   const { text } = req.body;
-  const voiceId = process.env.ELEVENLABS_VOICE_ID || req.body.voiceId || "EXAVITQu4vr4xnSDxMaL"; // Uses custom Ada voice if set
   
-  if (!process.env.ELEVENLABS_API_KEY) {
-    return res.status(500).json({ error: "Missing ELEVENLABS_API_KEY" });
-  }
-
-  try {
-    const response = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
-      {
+  // 1. Try Grok Voice TTS via OpenRouter if OPENROUTER_API_KEY is configured
+  const openRouterApiKey = process.env.OPENROUTER_API_KEY;
+  if (openRouterApiKey) {
+    try {
+      const response = await fetch("https://openrouter.ai/api/v1/audio/speech", {
         method: "POST",
         headers: {
-          "Accept": "audio/mpeg",
+          "Authorization": `Bearer ${openRouterApiKey}`,
           "Content-Type": "application/json",
-          "xi-api-key": process.env.ELEVENLABS_API_KEY,
+          "HTTP-Referer": "https://aistudio.google.com",
+          "X-Title": "Ada Glow"
         },
         body: JSON.stringify({
-          text,
-          model_id: "eleven_monolingual_v1",
-          voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.75
-          }
-        }),
+          model: "meta/muse-spark-1.1",
+          input: text,
+          voice: "alloy"
+        })
+      });
+      
+      if (response.ok) {
+        const audioBuffer = await response.arrayBuffer();
+        res.set("Content-Type", "audio/mpeg");
+        return res.send(Buffer.from(audioBuffer));
       }
-    );
-
-    if (!response.ok) {
-      const err = await response.text();
-      console.error("ElevenLabs error:", err);
-      return res.status(response.status).json({ error: "ElevenLabs API Error" });
+      console.warn("OpenRouter Grok TTS failed, falling back to HF.");
+    } catch (err) {
+      console.error("OpenRouter Grok TTS error:", err);
     }
+  }
 
-    const audioBuffer = await response.arrayBuffer();
-    res.set("Content-Type", "audio/mpeg");
-    res.send(Buffer.from(audioBuffer));
+  // 2. Fallback to Hugging Face Inference API
+  try {
+    const hfModel = "kakao-enterprise/vits-vctk"; // High quality fast TTS
+    const hfToken = process.env.HF_API_KEY;
+    const headers: any = { "Content-Type": "application/json" };
+    if (hfToken) headers["Authorization"] = `Bearer ${hfToken}`;
+
+    const response = await fetch(`https://api-inference.huggingface.co/models/${hfModel}`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ inputs: text })
+    });
+
+    if (response.ok) {
+      const audioBuffer = await response.arrayBuffer();
+      res.set("Content-Type", "audio/wav"); // HF typically returns wav or flac for TTS
+      return res.send(Buffer.from(audioBuffer));
+    } else {
+      const err = await response.text();
+      console.error("HF TTS Error:", err);
+      return res.status(503).json({ error: "HF TTS Service Unavailable" });
+    }
   } catch (error) {
-    console.error("TTS generation failed:", error);
-    res.status(500).json({ error: "TTS generation failed" });
+    console.error("HF TTS generation failed:", error);
+    return res.status(503).json({ error: "TTS Service Temporarily Unavailable" });
   }
 });
 
 // API Dynamic Models Pull Endpoint
 app.get("/api/gemini-models", async (req, res) => {
+  // Keeping endpoint name for now, but returning generic models
   try {
-    const apiKey = process.env.OPENROUTER_API_KEY || process.env.GEMINI_API_KEY;
+    const apiKey = process.env.OPENROUTER_API_KEY;
     if (!apiKey) {
       return res.json({
         models: [
-          { name: "google/gemini-flash-1.5", displayName: "Gemini Flash 1.5", description: "Standard, balanced text and reasoning tasks", isFallback: true },
-          { name: "google/gemini-flash-1.5-8b", displayName: "Gemini Flash 1.5 8B", description: "Cost-efficient, super-fast model", isFallback: true },
-          { name: "google/gemini-pro-1.5", displayName: "Gemini Pro 1.5", description: "Advanced reasoning, complex makeup profiles", isFallback: true }
+          { name: "meta-llama/llama-3.1-70b", displayName: "Llama 3.1 70B", description: "Versatile, strong reasoning", isFallback: true },
         ],
         apiKeyConfigured: false
       });
@@ -208,21 +222,10 @@ app.get("/api/gemini-models", async (req, res) => {
     const mappedModels = modelsArray.map((m: any) => ({
       name: m.id || "",
       displayName: m.name || m.id?.split("/").pop() || "AI Model",
-      description: m.description || `Context length: ${m.context_length}. Pricing: $${m.pricing?.prompt}/$${m.pricing?.completion} per 1M tokens.`,
-      supportedGenerationMethods: [], // OpenRouter doesn't expose this in the same way
+      description: m.description || `Context length: ${m.context_length}.`,
+      supportedGenerationMethods: [],
       isFallback: false
-    })).filter((m: any) => m.name.includes("google") || m.name.includes("gemini") || m.name.includes("openai") || m.name.includes("anthropic"));
-
-    if (mappedModels.length === 0) {
-      return res.json({
-        models: [
-          { name: "google/gemini-flash-1.5", displayName: "Gemini Flash 1.5", description: "Standard, balanced text and reasoning tasks", isFallback: false },
-          { name: "google/gemini-flash-1.5-8b", displayName: "Gemini Flash 1.5 8B", description: "Cost-efficient, super-fast model", isFallback: false },
-          { name: "google/gemini-pro-1.5", displayName: "Gemini Pro 1.5", description: "Advanced reasoning, complex makeup profiles", isFallback: false }
-        ],
-        apiKeyConfigured: true
-      });
-    }
+    })).filter((m: any) => m.name.includes("meta") || m.name.includes("openai") || m.name.includes("anthropic"));
 
     res.json({
       models: mappedModels,
@@ -231,11 +234,7 @@ app.get("/api/gemini-models", async (req, res) => {
   } catch (error: any) {
     console.error("Error listing OpenRouter models from API key:", error);
     res.json({
-      models: [
-        { name: "google/gemini-flash-1.5", displayName: "Gemini Flash 1.5", description: "Standard, balanced text and reasoning tasks", isFallback: true },
-        { name: "google/gemini-flash-1.5-8b", displayName: "Gemini Flash 1.5 8B", description: "Cost-efficient, super-fast model", isFallback: true },
-        { name: "google/gemini-pro-1.5", displayName: "Gemini Pro 1.5", description: "Advanced reasoning, complex makeup profiles", isFallback: true }
-      ],
+      models: [],
       apiKeyConfigured: false,
       error: error.message || "Failed to query live OpenRouter registry."
     });
@@ -257,94 +256,8 @@ async function startServer() {
     });
   }
 
-  const server = app.listen(PORT, "0.0.0.0", () => {
+  app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on port ${PORT}`);
-  });
-
-  // Setup WebSocket server for Gemini Live API
-  const wss = new WebSocketServer({ server, path: "/live" });
-
-  const ai = new GoogleGenAI({
-    apiKey: process.env.GEMINI_API_KEY || 'missing-key',
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build',
-      }
-    }
-  });
-
-  wss.on("connection", async (clientWs) => {
-    console.log("Client connected to Live API WebSocket");
-    
-    if (!process.env.GEMINI_API_KEY) {
-      console.error("No API key available for Live API");
-      clientWs.close();
-      return;
-    }
-
-    try {
-      const session = await ai.live.connect({
-        model: "gemini-3.1-flash-live-preview",
-        callbacks: {
-          onmessage: (message: LiveServerMessage) => {
-            const data = message.serverContent?.modelTurn?.parts?.[0];
-            if (data?.inlineData?.data) {
-                clientWs.send(JSON.stringify({ audio: data.inlineData.data }));
-            }
-            if (data?.text) {
-                clientWs.send(JSON.stringify({ makeup_feedback: data.text }));
-            }
-            
-            if (message.serverContent?.interrupted) {
-              clientWs.send(JSON.stringify({ interrupted: true }));
-            }
-          },
-          onclose: () => {
-            console.log("Live session closed by server");
-            clientWs.close();
-          }
-        },
-        config: {
-          responseModalities: [Modality.AUDIO, Modality.TEXT],
-          speechConfig: {
-            voiceConfig: { prebuiltVoiceConfig: { voiceName: "Aoede" } },
-          },
-          systemInstruction: ADA_SYSTEM_INSTRUCTION + 
-              "\n\n[EMOTIONAL CHECK] Analyze the user's facial mood. " +
-              "If they appear sad, down, or low-energy, provide uplifting, personalized makeup encouragement. " +
-              "Be supportive and caring.",
-        },
-      });
-
-      clientWs.on("message", (data) => {
-        try {
-          const msg = JSON.parse(data.toString());
-          if (msg.audio) {
-            session.sendRealtimeInput({
-              audio: { data: msg.audio, mimeType: "audio/pcm;rate=16000" },
-            });
-          }
-          if (msg.video) {
-            session.sendRealtimeInput({
-               video: { data: msg.video, mimeType: "image/jpeg" }
-            });
-          }
-        } catch (err) {
-          console.error("Error processing client WS message:", err);
-        }
-      });
-
-      clientWs.on("close", () => {
-        console.log("Client disconnected from Live API WebSocket");
-        try {
-           session.close();
-        } catch (e) {}
-      });
-
-    } catch (err) {
-      console.error("Failed to connect to Gemini Live API:", err);
-      clientWs.close();
-    }
   });
 }
 

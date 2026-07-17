@@ -18,9 +18,11 @@ import { TryOnView } from "./components/TryOnView";
 import { ProfileView } from "./components/ProfileView";
 import { Onboarding } from "./components/Onboarding";
 import { AdaLiveView } from "./components/AdaLiveView";
+import { DashboardView } from "./components/DashboardView";
 import { useFirebase } from "./lib/FirebaseProvider";
 import { Message } from "./types";
-import { Sparkles, Download, LayoutGrid, Palette, Camera, MessageCircle, User } from "lucide-react";
+import { Sparkles, Download, LayoutGrid, Palette, Camera, MessageCircle, User, Home } from "lucide-react";
+import { useSpeech } from "./hooks/useSpeech";
 
 const LOADING_QUOTES = [
   "Waking up Ada... She is currently downloading her digital coffee. Let the progress bar finish, or you're going to deal with some serious digital attitude.",
@@ -33,6 +35,31 @@ export default function App() {
   const { user, profile, loading: authLoading } = useFirebase();
   const [bootProgress, setBootProgress] = useState(0);
   const [isBooting, setIsBooting] = useState(true);
+  
+  // WAKE WORD LISTENER
+  const [isWakeWordListening, setIsWakeWordListening] = useState(false);
+  const wakeWordSpeech = useSpeech({
+    onResult: (text) => {
+      if (text.toLowerCase().includes("hey ada")) {
+        console.log("Wake word detected!");
+        setActiveTab("live");
+        // We need a way to trigger activateLive in AdaLiveView. 
+        // For now, let's just switch tab. The user can hit the mic.
+        // If we want it automatic, we'd need a ref or state.
+      }
+    }
+  });
+
+  useEffect(() => {
+    // Only listen for wake word when on dashboard or home
+    if (!isWakeWordListening && !isBooting) {
+        wakeWordSpeech.startListening();
+        setIsWakeWordListening(true);
+    }
+    return () => {
+        wakeWordSpeech.stopListening();
+    }
+  }, [isBooting, isWakeWordListening]);
 
   // Progressive startup loading quote sequence
   useEffect(() => {
@@ -59,7 +86,7 @@ export default function App() {
   }, [isBooting]);
 
   const [onboarded, setOnboarded] = useState(false);
-  const [activeTab, setActiveTab] = useState('chat');
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedTryOnColors, setSelectedTryOnColors] = useState<Record<string, string>>({
     lips: "#FF4A8D",
     eyes: "#673AB7",
@@ -302,6 +329,18 @@ export default function App() {
       {/* Main Content Area */}
       <main className="relative z-10 flex-1 flex flex-col justify-end">
         <AnimatePresence mode="wait">
+          {activeTab === 'dashboard' && (
+            <motion.div 
+              key="dashboard-view"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 1.1 }}
+              className="absolute inset-0 z-30 bg-black/40 backdrop-blur-3xl overflow-hidden"
+            >
+              <DashboardView />
+            </motion.div>
+          )}
+
           {activeTab === 'chat' && (
             <motion.div 
               key="chat-view"
@@ -433,7 +472,7 @@ export default function App() {
             className="fixed bottom-6 left-6 right-6 z-30 h-16 bg-white/90 backdrop-blur-2xl rounded-[32px] border border-white/50 shadow-[0_20px_50px_rgba(0,0,0,0.2)] flex items-center justify-around px-4"
           >
             {[
-              { id: 'feed', icon: LayoutGrid, label: 'Feed' },
+              { id: 'dashboard', icon: Home, label: 'Home' },
               { id: 'tryon', icon: Palette, label: 'Try-on' },
               { id: 'live', icon: Camera, label: 'Ada Live', activeColor: 'bg-cyber-lime' },
               { id: 'chat', icon: MessageCircle, label: 'Chat' },
