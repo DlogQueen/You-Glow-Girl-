@@ -1,6 +1,0 @@
-{
-  "name": "You Glow Girl",
-  "description": "\"WHO SAID AI AGENTS HAD TO BE ALL FOR THE GUYS???\" Your ultra-empowering AI beauty architect and tech pioneer bestie, Ada.",
-  "requestFramePermissions": ["camera", "microphone", "geolocation"],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
