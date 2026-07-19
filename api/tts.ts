@@ -18,6 +18,8 @@ async function speakWithOpenRouter(text: string, apiKey: string): Promise<Buffer
         model: "openai/gpt-audio-mini",
         modalities: ["text", "audio"],
         audio: { voice: "alloy", format: "mp3" },
+        // gpt-audio-mini only supports audio output in streaming mode.
+        stream: true,
         messages: [
           {
             role: "system",
@@ -28,18 +30,43 @@ async function speakWithOpenRouter(text: string, apiKey: string): Promise<Buffer
       })
     });
 
-    if (!response.ok) {
+    if (!response.ok || !response.body) {
       console.warn("OpenRouter TTS (gpt-audio-mini) failed, falling back.", await response.text());
       return null;
     }
 
-    const data = await response.json();
-    const base64Audio = data?.choices?.[0]?.message?.audio?.data;
-    if (!base64Audio) {
-      console.warn("OpenRouter TTS returned no audio payload, falling back.");
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    const audioChunks: Buffer[] = [];
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("data:")) continue;
+        const payload = trimmed.slice(5).trim();
+        if (payload === "[DONE]") continue;
+        try {
+          const json = JSON.parse(payload);
+          const audioData = json?.choices?.[0]?.delta?.audio?.data;
+          if (audioData) audioChunks.push(Buffer.from(audioData, "base64"));
+        } catch {
+          // ignore malformed SSE lines
+        }
+      }
+    }
+
+    if (audioChunks.length === 0) {
+      console.warn("OpenRouter TTS stream returned no audio payload, falling back.");
       return null;
     }
-    return Buffer.from(base64Audio, "base64");
+    return Buffer.concat(audioChunks);
   } catch (err) {
     console.error("OpenRouter TTS error:", err);
     return null;
@@ -107,7 +134,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (hfToken) headers["Authorization"] = `Bearer ${hfToken}`;
 
-    const response = await fetch(`https://api-inference.huggingface.co/models/${hfModel}`, {
+    const response = await fetch(`https://router.huggingface.co/hf-inference/models/${hfModel}`, {
       method: "POST",
       headers,
       body: JSON.stringify({ inputs: text })
