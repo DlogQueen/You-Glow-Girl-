@@ -550,13 +550,36 @@ export const CameraMirror = forwardRef<CameraMirrorHandle, CameraMirrorProps>(({
       });
       
       if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        // Ensure video is actually playing
+        const video = videoRef.current;
+        video.srcObject = stream;
         try {
-          await videoRef.current.play();
-          setMatrixLocked(true);
+          await video.play();
+
+          // getUserMedia can resolve with a stream that never actually
+          // delivers a frame (permission granted but feed blocked by the
+          // OS/browser). Without this, that shows as a silent black screen
+          // instead of falling back to the simulated feed.
+          const gotFrame = await new Promise<boolean>((resolve) => {
+            const timer = setTimeout(() => resolve(false), 3500);
+            video.addEventListener('playing', () => {
+              clearTimeout(timer);
+              resolve(true);
+            }, { once: true });
+          });
+
+          if (gotFrame && video.videoWidth > 0) {
+            setMatrixLocked(true);
+          } else {
+            console.warn("Camera stream never produced a frame, activating Simulated Mesh system.");
+            stream.getTracks().forEach(track => track.stop());
+            setIsSimulated(true);
+            setMatrixLocked(true);
+          }
         } catch (playErr) {
           console.warn("Video play failed:", playErr);
+          stream.getTracks().forEach(track => track.stop());
+          setIsSimulated(true);
+          setMatrixLocked(true);
         }
       }
     } catch (err: any) {

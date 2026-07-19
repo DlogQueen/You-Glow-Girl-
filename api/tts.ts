@@ -4,6 +4,30 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 // free-tier account. Used only if ELEVENLABS_VOICE_ID isn't configured.
 const DEFAULT_ELEVENLABS_VOICE_ID = "21m00Tcm4TlvDq8ikWAM";
 
+// OpenAI's streaming audio output is raw headerless 16-bit PCM at 24kHz mono
+// ("Unsupported value: 'audio.format' does not support 'mp3' when
+// stream=true" - pcm16 is the only streaming option). Wrap it in a WAV
+// header so browsers can actually play it.
+function pcm16ToWav(pcm: Buffer, sampleRate = 24000, channels = 1): Buffer {
+  const byteRate = sampleRate * channels * 2;
+  const blockAlign = channels * 2;
+  const header = Buffer.alloc(44);
+  header.write("RIFF", 0);
+  header.writeUInt32LE(36 + pcm.length, 4);
+  header.write("WAVE", 8);
+  header.write("fmt ", 12);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(channels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(byteRate, 28);
+  header.writeUInt16LE(blockAlign, 32);
+  header.writeUInt16LE(16, 34);
+  header.write("data", 36);
+  header.writeUInt32LE(pcm.length, 40);
+  return Buffer.concat([header, pcm]);
+}
+
 async function speakWithOpenRouter(text: string, apiKey: string): Promise<Buffer | null> {
   try {
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -17,7 +41,7 @@ async function speakWithOpenRouter(text: string, apiKey: string): Promise<Buffer
       body: JSON.stringify({
         model: "openai/gpt-audio-mini",
         modalities: ["text", "audio"],
-        audio: { voice: "alloy", format: "mp3" },
+        audio: { voice: "alloy", format: "pcm16" },
         // gpt-audio-mini only supports audio output in streaming mode.
         stream: true,
         messages: [
@@ -66,7 +90,7 @@ async function speakWithOpenRouter(text: string, apiKey: string): Promise<Buffer
       console.warn("OpenRouter TTS stream returned no audio payload, falling back.");
       return null;
     }
-    return Buffer.concat(audioChunks);
+    return pcm16ToWav(Buffer.concat(audioChunks));
   } catch (err) {
     console.error("OpenRouter TTS error:", err);
     return null;
@@ -90,7 +114,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (openRouterKey) {
     const audio = await speakWithOpenRouter(text, openRouterKey);
     if (audio) {
-      res.setHeader("Content-Type", "audio/mpeg");
+      res.setHeader("Content-Type", "audio/wav");
       res.send(audio);
       return;
     }

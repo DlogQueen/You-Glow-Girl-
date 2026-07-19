@@ -380,12 +380,43 @@ export function Onboarding({ onComplete }: OnboardingProps) {
 
   // Set video source when step is "scan" and stream is ready
   useEffect(() => {
-    if (step === "scan" && stream && videoRef.current) {
-      videoRef.current.srcObject = stream;
-      videoRef.current.play().catch(err => {
+    if (step !== "scan" || !stream || !videoRef.current) return;
+
+    const video = videoRef.current;
+    video.srcObject = stream;
+    let cancelled = false;
+
+    video.play()
+      .then(() => {
+        // getUserMedia can resolve with a stream that never actually
+        // delivers a frame (permission granted but feed blocked by the
+        // OS/browser). Without this check, that shows as a silent black
+        // screen instead of falling back to the simulated feed.
+        return new Promise<boolean>((resolve) => {
+          const timer = setTimeout(() => resolve(false), 3500);
+          video.addEventListener('playing', () => {
+            clearTimeout(timer);
+            resolve(true);
+          }, { once: true });
+        });
+      })
+      .then((gotFrame) => {
+        if (cancelled) return;
+        if (!gotFrame || video.videoWidth === 0) {
+          console.warn("Onboarding camera stream never produced a frame, activating Simulated Mesh system.");
+          stream.getTracks().forEach(track => track.stop());
+          setIsSimulated(true);
+        }
+      })
+      .catch(err => {
         console.warn("Failed to play onboarding video stream:", err);
+        if (!cancelled) {
+          stream.getTracks().forEach(track => track.stop());
+          setIsSimulated(true);
+        }
       });
-    }
+
+    return () => { cancelled = true; };
   }, [step, stream]);
 
   // Clean up stream tracks on unmount
