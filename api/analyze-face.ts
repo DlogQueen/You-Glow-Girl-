@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { generateContentAI } from "../src/lib/gemini.server";
+import { generateContentAI } from "../src/lib/gemini.server.js";
 
 const PROFILE_ANALYSIS_PROMPT = `
 Analyze this person's facial features for a makeup profile.

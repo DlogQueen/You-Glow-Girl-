@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { generateContentAI } from "../src/lib/gemini.server";
-import { getAdaSystemInstruction } from "../src/lib/adaSoul.server";
+import { generateContentAI } from "../src/lib/gemini.server.js";
+import { getAdaSystemInstruction } from "../src/lib/adaSoul.server.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
