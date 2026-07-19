@@ -23,6 +23,8 @@ import { useFirebase } from "./lib/FirebaseProvider";
 import { Message } from "./types";
 import { Sparkles, Download, LayoutGrid, Palette, Camera, MessageCircle, User, Home } from "lucide-react";
 import { useSpeech } from "./hooks/useSpeech";
+import { UpgradeModal } from "./components/UpgradeModal";
+import { getChatUsageStatus, recordChatUsage, isElite } from "./lib/usage";
 
 const LOADING_QUOTES = [
   "Waking up Ada... She is currently downloading her digital coffee. Let the progress bar finish, or you're going to deal with some serious digital attitude.",
@@ -32,7 +34,8 @@ const LOADING_QUOTES = [
 ];
 
 export default function App() {
-  const { user, profile, loading: authLoading } = useFirebase();
+  const { user, profile, loading: authLoading, updateProfile } = useFirebase();
+  const [upgradeModalReason, setUpgradeModalReason] = useState<"chat-limit" | "live-locked" | null>(null);
   const [bootProgress, setBootProgress] = useState(0);
   const [isBooting, setIsBooting] = useState(true);
   
@@ -42,8 +45,12 @@ export default function App() {
     onResult: (text) => {
       if (text.toLowerCase().includes("hey ada")) {
         console.log("Wake word detected!");
+        if (!isElite(profile)) {
+          setUpgradeModalReason("live-locked");
+          return;
+        }
         setActiveTab("live");
-        // We need a way to trigger activateLive in AdaLiveView. 
+        // We need a way to trigger activateLive in AdaLiveView.
         // For now, let's just switch tab. The user can hit the mic.
         // If we want it automatic, we'd need a ref or state.
       }
@@ -118,6 +125,12 @@ export default function App() {
   const cameraRef = useRef<CameraMirrorHandle>(null);
 
   const handleSendMessage = async (text: string, uploadedImage?: string) => {
+    const usageStatus = getChatUsageStatus(profile, !user);
+    if (usageStatus.limitReached) {
+      setUpgradeModalReason("chat-limit");
+      return;
+    }
+
     // Capture visual context if camera is active, otherwise use uploaded image
     const image = uploadedImage || (isCameraNeeded ? cameraRef.current?.captureFrame() : null);
 
@@ -151,7 +164,7 @@ export default function App() {
       });
       
       const data = await response.json();
-      
+
       if (data.reply) {
         setMessages(prev => [...prev, {
           id: Math.random().toString(36).substring(7),
@@ -159,6 +172,7 @@ export default function App() {
           content: data.reply,
           timestamp: Date.now(),
         }]);
+        recordChatUsage(profile, !user, updateProfile);
       }
     } catch (error) {
       console.error("Chat error:", error);
@@ -453,6 +467,14 @@ export default function App() {
                 <span className="w-1.5 h-1.5 bg-pink-400 rounded-full mr-2 animate-pulse" />
                 12.4k online
               </div>
+              {!user && (
+                <button
+                  onClick={() => setActiveTab('profile')}
+                  className="text-cyber-lime text-[9px] font-bold uppercase tracking-[0.2em] flex items-center bg-black/30 backdrop-blur-xl px-4 py-2 rounded-full border border-cyber-lime/30 shadow-2xl"
+                >
+                  ☁️ Save your glow
+                </button>
+              )}
             </div>
 
             {/* Ring Light */}
@@ -482,7 +504,13 @@ export default function App() {
                 key={item.id}
                 id={`nav-${item.id}`}
                 whileTap={{ scale: 0.9 }}
-                onClick={() => setActiveTab(item.id)}
+                onClick={() => {
+                  if (item.id === 'live' && !isElite(profile)) {
+                    setUpgradeModalReason("live-locked");
+                    return;
+                  }
+                  setActiveTab(item.id);
+                }}
                 className="flex flex-col items-center gap-1 group relative"
               >
                 <div className={`p-2 rounded-2xl transition-all duration-300 ${
@@ -502,6 +530,10 @@ export default function App() {
           </motion.nav>
         )}
       </AnimatePresence>
+
+      {upgradeModalReason && (
+        <UpgradeModal reason={upgradeModalReason} onClose={() => setUpgradeModalReason(null)} />
+      )}
     </div>
   );
 }

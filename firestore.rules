@@ -73,7 +73,12 @@ service cloud.firestore {
       allow list: if isSignedIn();
       allow create: if isOwner(userId) && isValidUser(incoming()) && incoming().uid == userId;
       allow update: if isOwner(userId) && isValidUser(incoming()) && 
-                    incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'bio', 'undertone', 'confidenceScore', 'facialMetrics', 'privacySettings', 'lastScanAt', 'pronouns', 'goals', 'beautyGoal', 'tier']);
+                    // NOTE: 'tier' is deliberately NOT in this list. It must never be
+                    // client-writable, or any signed-in user could grant themselves
+                    // Premium for free via the Firestore SDK. Only flip it from a
+                    // trusted server context (Firebase Admin SDK / Stripe webhook),
+                    // which bypasses these rules entirely.
+                    incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'bio', 'undertone', 'confidenceScore', 'facialMetrics', 'privacySettings', 'lastScanAt', 'pronouns', 'goals', 'beautyGoal', 'usage']);
       allow delete: if isOwner(userId);
     }
 

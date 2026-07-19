@@ -9,9 +9,11 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { useFirebase } from "../lib/FirebaseProvider";
 import { auth, db, signInWithGoogle } from "../lib/firebase";
-import { 
-  collection, query, getDocs, where, orderBy, 
-  deleteDoc, doc, updateDoc, serverTimestamp, addDoc 
+import { isElite } from "../lib/usage";
+import { STRIPE_PREMIUM_PAYMENT_LINK } from "../lib/config";
+import {
+  collection, query, getDocs, where, orderBy,
+  deleteDoc, doc, updateDoc, serverTimestamp, addDoc
 } from "firebase/firestore";
 
 type ProfileTab = 'passport' | 'vanity' | 'report' | 'vault';
@@ -1316,20 +1318,26 @@ export function ProfileView() {
                     <div className="flex items-center justify-between p-4 bg-black/20 rounded-2xl border border-white/5">
                       <div className="space-y-0.5">
                         <p className="text-white text-sm font-bold">Membership Tier</p>
-                        <p className="text-white/40 text-[10px]">{profile?.tier === 'elite' ? 'Elite Features Active' : 'Free Basic Plan'}</p>
+                        <p className="text-white/40 text-[10px]">{isElite(profile) ? 'Elite Features Active' : 'Free Basic Plan'}</p>
                       </div>
-                      <button 
-                        onClick={async () => {
-                          if (!user) return;
-                          const newTier = profile?.tier === 'elite' ? 'free' : 'elite';
-                          await updateDoc(doc(db, 'users', user.uid), { tier: newTier });
-                        }}
-                        className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase transition-all shadow-xl cursor-pointer ${
-                          profile?.tier === 'elite' ? 'bg-cyber-lime text-onyx' : 'bg-white text-onyx'
-                        }`}
-                      >
-                        {profile?.tier === 'elite' ? 'Manage Elite' : 'Upgrade to Elite'}
-                      </button>
+                      {isElite(profile) ? (
+                        <span className="px-4 py-2 rounded-xl text-[10px] font-bold uppercase bg-cyber-lime text-onyx shadow-xl">
+                          Elite Active
+                        </span>
+                      ) : STRIPE_PREMIUM_PAYMENT_LINK ? (
+                        <a
+                          href={STRIPE_PREMIUM_PAYMENT_LINK}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-4 py-2 rounded-xl text-[10px] font-bold uppercase bg-white text-onyx shadow-xl transition-all cursor-pointer"
+                        >
+                          Upgrade to Elite
+                        </a>
+                      ) : (
+                        <span className="px-4 py-2 rounded-xl text-[10px] font-bold uppercase bg-white/10 text-white/30">
+                          Elite Coming Soon
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>

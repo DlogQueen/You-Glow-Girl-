@@ -1,53 +1,6 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <script>
-      // 🚨 CRITICAL FETCH PATCH: Some sandboxed environments lock window.fetch as a getter.
-      // We must unlock it before any third-party scripts (like Vite's HMR or libraries) try to override it.
-      (function() {
-        if (typeof window !== 'undefined') {
-          try {
-            let currentFetch = window.fetch ? window.fetch.bind(window) : null;
-            
-            // Helper to define getter and setter safely
-            function patchTarget(obj, prop) {
-              try {
-                const desc = Object.getOwnPropertyDescriptor(obj, prop);
-                if (desc && !desc.configurable) {
-                  // If it's already non-configurable, we can't redefine it
-                  return;
-                }
-                Object.defineProperty(obj, prop, {
-                  get: function() {
-                    return currentFetch;
-                  },
-                  set: function(val) {
-                    currentFetch = val;
-                  },
-                  configurable: true,
-                  enumerable: true
-                });
-              } catch (err) {
-                console.warn('Could not patch', prop, 'on', obj, err);
-              }
-            }
-
-            // Patch all possible levels so that setting fetch never throws
-            patchTarget(window, 'fetch');
-            if (window.__proto__) {
-              patchTarget(window.__proto__, 'fetch');
-            }
-            if (typeof Window !== 'undefined' && Window.prototype) {
-              patchTarget(Window.prototype, 'fetch');
-            }
-            
-            console.log('Successfully completed robust fetch getter/setter patch across window and prototypes.');
-          } catch (e) {
-            console.error('Fetch patch failure:', e);
-          }
-        }
-      })();
-    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>You Glow Girl</title>
