@@ -88,16 +88,17 @@ async function generateWithOpenRouter(message: string, image: string | undefined
   }
   parts.push({ type: "text", text: message });
 
-  // gpt-5-nano is the cheapest vision-capable model on OpenRouter by a wide
-  // margin and is plenty for Ada's chat/tip/face-analysis prompts. No audio
-  // is needed here (that's handled separately in api/tts.ts), so cost beats
-  // picking a pricier model like Gemini for this path.
-  const chosenModel = process.env.OPENROUTER_MODEL || "openai/gpt-5-nano";
+  // Free-tier vision models first so chat/tips/face-analysis cost nothing
+  // day to day. gpt-5-nano stays as a last-resort paid fallback (a fraction
+  // of a cent per request) in case every free model is rate-limited at once
+  // - OpenRouter's free tier caps usage per key, so an outage-proof floor
+  // matters for a live app.
+  const chosenModel = process.env.OPENROUTER_MODEL || "google/gemma-4-31b-it:free";
   const modelsToTry = [...new Set([
     chosenModel,
-    "openai/gpt-5-mini",
-    "google/gemini-3.5-flash",
-    "google/gemini-2.5-flash"
+    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+    "openrouter/free",
+    "openai/gpt-5-nano"
   ])];
 
   let finalResponse = null;

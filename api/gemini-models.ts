@@ -7,7 +7,7 @@ const STATIC_FALLBACK_MODELS = [
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const openRouterKey = process.env.OPENROUTER_API_KEY;
-  const defaultModel = process.env.OPENROUTER_MODEL || "openai/gpt-5-nano";
+  const defaultModel = process.env.OPENROUTER_MODEL || "google/gemma-4-31b-it:free";
 
   if (!openRouterKey) {
     res.json({

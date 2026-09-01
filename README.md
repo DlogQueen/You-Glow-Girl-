@@ -17,7 +17,7 @@ Guest users can try the app immediately (progress is saved locally); signing in 
 
 - **Frontend**: Vite + React 19 + TypeScript, Tailwind CSS, Framer Motion
 - **Backend**: Vercel serverless functions (`/api/*.ts`)
-- **AI**: OpenRouter (primary — `gpt-5-nano` for chat/vision, `gpt-audio-mini` for voice), with a direct Gemini API fallback
+- **AI**: OpenRouter (primary — free-tier `gemma-4-31b-it` for chat/vision, `gpt-audio-mini` for voice), with a direct Gemini API fallback
 - **Data**: Firebase (Auth + Firestore)
 - **Payments**: Stripe Payment Link (manual tier upgrade until a webhook is built — see `firestore.rules`)
 
