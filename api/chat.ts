@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { generateContentAI } from "../src/lib/gemini.server.js";
 import { getAdaSystemInstruction } from "../src/lib/adaSoul.server.js";
+import { selectMemoriesForContext } from "../src/lib/memory.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
@@ -24,6 +25,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 - Items in Vanity: ${profile.vanityCount || 0}
 - Photos Shared in Portfolio Grid: ${profile.galleryCount || 0}
 `;
+
+      const memories = selectMemoriesForContext(profile.longTermMemories);
+      if (memories.length > 0) {
+        customInstruction += `\n[LONG-TERM MEMORY] - Things you (Ada) remember about this user from past conversations. Weave these in naturally where relevant, don't just recite them:\n${memories.map((m) => `- ${m.summary}`).join("\n")}\n`;
+      }
     }
     const reply = await generateContentAI(message, image, customInstruction);
     res.json({ reply });

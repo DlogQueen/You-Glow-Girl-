@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { 
   Sparkles, Mic, VolumeX, AlertCircle, RefreshCw, AudioLines, 
   Info, Shield, Layers, Eye, EyeOff, Cpu, ChevronRight, ChevronLeft, 
-  Play, ArrowLeft, Check, Loader2, Award
+  Play, ArrowLeft, Check, Loader2, Award, ChevronUp, ChevronDown, Minimize2
 } from "lucide-react";
 import { triggerHaptic } from "../lib/haptics";
 import { useSpeech } from "../hooks/useSpeech";
@@ -132,6 +132,12 @@ export function AdaLiveView({ captureFrame, isImmersiveMode, setIsImmersiveMode 
   const [mockAdaFdbk, setMockAdaFdbk] = useState<string>("");
   const [isFeedbackLoading, setIsFeedbackLoading] = useState<boolean>(false);
   const [realtimeFeedback, setRealtimeFeedback] = useState<string | null>(null);
+
+  // Individual collapse state for each overlay panel, independent of the
+  // global immersive-mode toggle - each floating card can be shrunk on its
+  // own without hiding everything else.
+  const [isProtocolPanelCollapsed, setIsProtocolPanelCollapsed] = useState(false);
+  const [isMatrixCardCollapsed, setIsMatrixCardCollapsed] = useState(false);
 
   const startScanningAnalysis = () => {
     setIsScanningActive(true);
@@ -300,20 +306,38 @@ export function AdaLiveView({ captureFrame, isImmersiveMode, setIsImmersiveMode 
               <span className="text-[8px] font-mono font-bold uppercase tracking-widest text-cyber-lime block">SYS PROTOCOL MANAGER</span>
               <span className="text-white text-xs font-bold font-display uppercase tracking-wider">{modesData[activeMode].title}</span>
             </div>
-            <div className="flex gap-1.5 overflow-x-auto max-w-[200px] no-scrollbar">
-              {(["glow_guide", "clinical_studio", "beauty_counter", "runway_backstage", "digital_agency"] as OperatingMode[]).map((m) => (
-                <button
-                  key={m}
-                  onClick={() => setActiveMode(m)}
-                  className={`p-1.5 rounded-lg border text-[8px] font-bold uppercase tracking-wider transition-all truncate max-w-[70px] ${
-                    activeMode === m
-                      ? "bg-cyber-lime border-cyber-lime text-onyx shadow-[0_0_10px_var(--color-cyber-lime)]"
-                      : "bg-white/5 border-white/10 text-white/50 hover:bg-white/10"
-                  }`}
-                >
-                  {m.split('_')[0]}
-                </button>
-              ))}
+            <div className="flex items-center gap-2">
+              <AnimatePresence>
+                {!isProtocolPanelCollapsed && (
+                  <motion.div
+                    initial={{ width: 0, opacity: 0 }}
+                    animate={{ width: "auto", opacity: 1 }}
+                    exit={{ width: 0, opacity: 0 }}
+                    className="flex gap-1.5 overflow-x-auto max-w-[200px] no-scrollbar"
+                  >
+                    {(["glow_guide", "clinical_studio", "beauty_counter", "runway_backstage", "digital_agency"] as OperatingMode[]).map((m) => (
+                      <button
+                        key={m}
+                        onClick={() => setActiveMode(m)}
+                        className={`p-1.5 rounded-lg border text-[8px] font-bold uppercase tracking-wider transition-all truncate max-w-[70px] ${
+                          activeMode === m
+                            ? "bg-cyber-lime border-cyber-lime text-onyx shadow-[0_0_10px_var(--color-cyber-lime)]"
+                            : "bg-white/5 border-white/10 text-white/50 hover:bg-white/10"
+                        }`}
+                      >
+                        {m.split('_')[0]}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+              <button
+                onClick={() => setIsProtocolPanelCollapsed(!isProtocolPanelCollapsed)}
+                className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-white/50 hover:text-white hover:bg-white/10 transition-all flex-shrink-0"
+                title={isProtocolPanelCollapsed ? "Expand protocol selector" : "Collapse protocol selector"}
+              >
+                {isProtocolPanelCollapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
+              </button>
             </div>
           </motion.div>
         )}
@@ -424,9 +448,11 @@ export function AdaLiveView({ captureFrame, isImmersiveMode, setIsImmersiveMode 
                 }}
                 exit={{ opacity: 0, scale: 0.95 }}
                 transition={{ duration: 0.3 }}
-                className="relative w-72 h-[340px] rounded-[48px] bg-black/40 border overflow-hidden backdrop-blur-md flex flex-col justify-between p-5 pointer-events-auto"
+                className={`relative w-72 rounded-[48px] bg-black/40 border overflow-hidden backdrop-blur-md flex flex-col justify-between p-5 pointer-events-auto transition-[height] duration-300 ${
+                  isMatrixCardCollapsed ? "h-20" : "h-[340px]"
+                }`}
               >
-                
+
                 {/* Holographic grid lines backplane */}
                 <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.01)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.01)_1px,transparent_1px)] bg-[size:16px_16px] pointer-events-none" />
 
@@ -441,10 +467,20 @@ export function AdaLiveView({ captureFrame, isImmersiveMode, setIsImmersiveMode 
                       </div>
                       <div className="text-white/60 text-[6.5px] font-bold uppercase">{modesData[activeMode].status}</div>
                     </div>
-                    <span className="text-white/30 text-[7px]">CHROMA LABS: OK</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-white/30 text-[7px]">CHROMA LABS: OK</span>
+                      <button
+                        onClick={() => setIsMatrixCardCollapsed(!isMatrixCardCollapsed)}
+                        className="p-1 rounded-md bg-white/5 border border-white/10 text-white/50 hover:text-white hover:bg-white/10 transition-all"
+                        title={isMatrixCardCollapsed ? "Expand" : "Minimize"}
+                      >
+                        <Minimize2 size={8} />
+                      </button>
+                    </div>
                   </div>
 
                   {/* Sleek Sub-Tab selection */}
+                  {!isMatrixCardCollapsed && (
                   <div className="flex gap-1.5 justify-center p-0.5 rounded-full bg-white/5 border border-white/10 font-mono">
                     <button 
                       onClick={() => setGlassTab("face")} 
@@ -467,10 +503,11 @@ export function AdaLiveView({ captureFrame, isImmersiveMode, setIsImmersiveMode 
                       💄 Guides
                     </button>
                   </div>
+                  )}
                 </div>
 
                 {/* MAIN CONTENT AREA */}
-                {glassTab === "face" ? (
+                {!isMatrixCardCollapsed && (glassTab === "face" ? (
                   <>
                     {/* ADA AVATAR REPRESENTATION */}
                     <div className="flex-1 relative flex items-center justify-center my-2 z-10 overflow-hidden">
@@ -687,7 +724,7 @@ export function AdaLiveView({ captureFrame, isImmersiveMode, setIsImmersiveMode 
                       })()
                     )}
                   </div>
-                )}
+                ))}
               </motion.div>
             )}
           </AnimatePresence>

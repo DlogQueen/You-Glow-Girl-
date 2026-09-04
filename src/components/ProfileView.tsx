@@ -1342,6 +1342,48 @@ export function ProfileView() {
                   </div>
                 </div>
 
+                {/* What Ada Remembers - transparency into the persistent memory system */}
+                <div className="bg-white/5 border border-white/10 rounded-[32px] p-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-white font-display font-bold text-xl tracking-tight">What Ada Remembers</h3>
+                      <p className="text-white/40 text-[10px] font-mono uppercase tracking-wider">
+                        {profile?.longTermMemories?.length ? `${profile.longTermMemories.length} memories carried across chats` : "Nothing yet"}
+                      </p>
+                    </div>
+                    {!!profile?.longTermMemories?.length && (
+                      <button
+                        onClick={() => updateProfile({ longTermMemories: [] })}
+                        className="p-2.5 bg-white/5 hover:bg-red-500/10 text-white/40 hover:text-red-400 rounded-xl transition-all cursor-pointer"
+                        title="Clear all memories"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+
+                  {profile?.longTermMemories?.length ? (
+                    <div className="space-y-2 max-h-[240px] overflow-y-auto pr-1 no-scrollbar">
+                      {profile.longTermMemories.map((mem) => (
+                        <div key={mem.id} className="p-3 bg-black/20 rounded-2xl border border-white/5 flex items-start justify-between gap-2">
+                          <p className="text-white/70 text-[11px] leading-relaxed flex-1">{mem.summary}</p>
+                          <button
+                            onClick={() => updateProfile({ longTermMemories: profile.longTermMemories!.filter((m) => m.id !== mem.id) })}
+                            className="text-white/20 hover:text-red-400 transition-colors flex-shrink-0 mt-0.5 cursor-pointer"
+                            title="Forget this"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-white/30 text-[10px] leading-relaxed">
+                      As you chat with Ada, she'll periodically distill what's worth remembering here - your preferences, goals, and recurring themes - so future conversations pick up where past ones left off.
+                    </p>
+                  )}
+                </div>
+
                 {/* Dynamic Gemini Cloud Registry */}
                 <div className="bg-white/5 border border-white/10 rounded-[32px] p-6 space-y-6">
                   <div className="flex items-center justify-between">

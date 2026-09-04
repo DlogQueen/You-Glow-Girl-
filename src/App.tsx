@@ -25,6 +25,7 @@ import { Sparkles, Download, LayoutGrid, Palette, Camera, MessageCircle, User, H
 import { useSpeech } from "./hooks/useSpeech";
 import { UpgradeModal } from "./components/UpgradeModal";
 import { getChatUsageStatus, recordChatUsage, isElite } from "./lib/usage";
+import { MEMORY_CONSOLIDATION_CHUNK_SIZE, buildTranscript, addMemory } from "./lib/memory";
 
 const LOADING_QUOTES = [
   "Waking up Ada... She is currently downloading her digital coffee. Let the progress bar finish, or you're going to deal with some serious digital attitude.",
@@ -180,6 +181,39 @@ export default function App() {
       setIsLoading(false);
     }
   };
+
+  // Persistent memory: once enough raw messages pile up, distill them into
+  // one compact long-term summary (via /api/consolidate-memory) instead of
+  // keeping the full transcript forever. Runs for guests too - updateProfile
+  // already handles both the Firestore and localStorage paths.
+  const lastConsolidatedIndexRef = useRef(0);
+  useEffect(() => {
+    if (isLoading) return;
+    const unconsolidated = messages.length - lastConsolidatedIndexRef.current;
+    if (unconsolidated < MEMORY_CONSOLIDATION_CHUNK_SIZE) return;
+
+    const chunk = messages.slice(lastConsolidatedIndexRef.current);
+    const startIndex = lastConsolidatedIndexRef.current;
+    lastConsolidatedIndexRef.current = messages.length;
+
+    (async () => {
+      try {
+        const response = await fetch("/api/consolidate-memory", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ transcript: buildTranscript(chunk) }),
+        });
+        if (!response.ok) throw new Error(`Consolidation failed: ${response.status}`);
+        const { summary, importance } = await response.json();
+        if (summary) {
+          await updateProfile({ longTermMemories: addMemory(profile?.longTermMemories, { summary, importance }) });
+        }
+      } catch (err) {
+        console.error("Memory consolidation failed, will retry with the next chunk:", err);
+        lastConsolidatedIndexRef.current = startIndex;
+      }
+    })();
+  }, [messages, isLoading]);
 
   if (authLoading || isBooting) {
     const activeQuoteIndex = Math.min(Math.floor(bootProgress / 25), LOADING_QUOTES.length - 1);
